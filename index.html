@@ -1,1209 +1,1337 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAnalytics } from "firebase/analytics"; // Aggiunto Analytics
-import { 
-  getAuth, 
-  signInAnonymously, 
-  onAuthStateChanged,
-  signInWithCustomToken 
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  onSnapshot, 
-  updateDoc, 
-  arrayUnion,
-  increment
-} from 'firebase/firestore';
-import { 
-  Trophy, 
-  Users, 
-  Play, 
-  RotateCw, 
-  AlertTriangle, 
-  CheckCircle, 
-  XCircle,
-  Sparkles,
-  Music,
-  Monitor,
-  Timer,
-  Coins,
-  ShieldCheck,
-  Gift,
-  Volume2,
-  Keyboard,
-  Mic,
-  Bot
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Ruota della Fortuna</title>
+    
+    <!-- Stili Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Configurazione per far funzionare React e Firebase direttamente nel browser -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+        "firebase/analytics": "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
+        "lucide-react": "https://esm.sh/lucide-react@0.344.0"
+      }
+    }
+    </script>
+    
+    <!-- Babel per tradurre il codice React -->
+    <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
+    
+    <style>
+      /* Fix per animazioni 3D */
+      .perspective-1000 { perspective: 1000px; }
+      .rotate-y-180 { transform: rotateY(180deg); }
+      .rotate-y-0 { transform: rotateY(0deg); }
+      .preserve-3d { transform-style: preserve-3d; }
+      .backface-hidden { backface-visibility: hidden; }
+    </style>
+</head>
+<body class="bg-black text-white">
+    <div id="root"></div>
 
-// --- GEMINI API SETUP ---
-const apiKey = ""; // Injected at runtime
+    <!-- MODIFICA IMPORTANTE: data-presets="react" (rimosso 'env' per evitare conflitti) -->
+    <script type="text/babel" data-type="module" data-presets="react">
+        import React, { useState, useEffect, useRef, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { initializeApp } from 'firebase/app';
+        import { getAnalytics } from "firebase/analytics";
+        import { 
+          getAuth, 
+          signInAnonymously, 
+          onAuthStateChanged,
+          signInWithCustomToken 
+        } from 'firebase/auth';
+        import { 
+          getFirestore, 
+          collection, 
+          doc, 
+          setDoc, 
+          onSnapshot, 
+          updateDoc, 
+          arrayUnion,
+          increment
+        } from 'firebase/firestore';
+        import { 
+          Trophy, Users, Play, RotateCw, AlertTriangle, CheckCircle, XCircle,
+          Sparkles, Music, Monitor, Timer, Coins, ShieldCheck, Gift, Volume2,
+          Keyboard, Mic, Bot
+        } from 'lucide-react';
 
-const generateAiPuzzle = async () => {
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ 
-            parts: [{ 
-              text: `Genera una frase segreta per il gioco 'La Ruota della Fortuna' in italiano. 
-              La frase deve essere:
-              1. Famosa, un modo di dire, o di cultura generale.
-              2. Breve (massimo 25 caratteri spazi inclusi, TASSATIVO).
-              3. Senza punteggiatura complessa (solo lettere e spazi).
-              
-              Scegli una categoria casuale tra: Proverbio, Film, Musica, Geografia, Scienza, Storia, Cucina, Curiosità.
-              
-              Rispondi SOLO con un JSON valido (niente markdown) in questo formato esatto:
-              { "category": "NOME CATEGORIA", "phrase": "FRASE IN MAIUSCOLO" }` 
-            }] 
-          }],
-          generationConfig: { 
-            responseMimeType: "application/json" 
+        // --- GEMINI API SETUP ---
+        const apiKey = "AIzaSyDpnLF7gCcqRsln3LLVoykdWxVfuBDDAZ4"; // TUA API KEY
+
+        const generateAiPuzzle = async () => {
+          try {
+            if (!apiKey) throw new Error("No API Key");
+            const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ 
+                    parts: [{ 
+                      text: `Genera una frase segreta per il gioco 'La Ruota della Fortuna' in italiano. 
+                      La frase deve essere:
+                      1. Famosa, un modo di dire, o di cultura generale.
+                      2. Breve (massimo 25 caratteri spazi inclusi, TASSATIVO).
+                      3. Senza punteggiatura complessa (solo lettere e spazi).
+                      
+                      Scegli una categoria casuale tra: Proverbio, Film, Musica, Geografia, Scienza, Storia, Cucina, Curiosità.
+                      
+                      Rispondi SOLO con un JSON valido (niente markdown) in questo formato esatto:
+                      { "category": "NOME CATEGORIA", "phrase": "FRASE IN MAIUSCOLO" }` 
+                    }] 
+                  }],
+                  generationConfig: { 
+                    responseMimeType: "application/json" 
+                  }
+                })
+              }
+            );
+            
+            const data = await response.json();
+            const result = JSON.parse(data.candidates[0].content.parts[0].text);
+            return { 
+              category: result.category.toUpperCase(), 
+              phrase: result.phrase.toUpperCase().replace(/[^A-Z ]/g, "") // Pulisce caratteri strani
+            };
+          } catch (error) {
+            console.error("Gemini Error:", error);
+            return null; // Fallback to local DB
           }
-        })
-      }
-    );
-    
-    const data = await response.json();
-    const result = JSON.parse(data.candidates[0].content.parts[0].text);
-    return { 
-      category: result.category.toUpperCase(), 
-      phrase: result.phrase.toUpperCase().replace(/[^A-Z ]/g, "") // Pulisce caratteri strani
-    };
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    return null; // Fallback to local DB
-  }
-};
-
-const generateHostCommentary = async (gameState, lastAction) => {
-  try {
-    const prompt = `Sei il conduttore carismatico ed energico di un gioco televisivo simile alla Ruota della Fortuna (tipo Gerry Scotti o Mike Bongiorno).
-    
-    Situazione attuale:
-    - Ultima azione: "${lastAction}"
-    - Turno di: ${gameState.currentPlayerName}
-    - Punteggio attuale: €${gameState.currentScore}
-    
-    Genera un commento brevissimo (massimo 15 parole), divertente, empatico o leggermente sarcastico in italiano per commentare l'azione. Usa delle emoji.`;
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      }
-    );
-    
-    const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
-  } catch (error) {
-    console.error("Gemini Commentary Error:", error);
-    return "Che tensione in studio! Chi vincerà? 🎤";
-  }
-};
-
-
-// --- SISTEMA AUDIO (Web Audio API) ---
-const audioCtx = typeof window !== 'undefined' ? new (window.AudioContext || window.webkitAudioContext)() : null;
-
-const playSound = (type) => {
-  if (!audioCtx) return;
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  const now = audioCtx.currentTime;
-
-  switch (type) {
-    case 'tick':
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(200, now);
-      osc.frequency.exponentialRampToValueAtTime(50, now + 0.05);
-      gain.gain.setValueAtTime(0.3, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-      osc.start(now);
-      osc.stop(now + 0.05);
-      break;
-    case 'correct':
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(523.25, now);
-      osc.frequency.setValueAtTime(659.25, now + 0.1);
-      osc.frequency.setValueAtTime(783.99, now + 0.2);
-      osc.frequency.setValueAtTime(1046.50, now + 0.3);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.linearRampToValueAtTime(0, now + 0.8);
-      osc.start(now);
-      osc.stop(now + 0.8);
-      break;
-    case 'wrong':
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(100, now);
-      osc.frequency.linearRampToValueAtTime(80, now + 0.3);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.linearRampToValueAtTime(0, now + 0.3);
-      osc.start(now);
-      osc.stop(now + 0.3);
-      break;
-    case 'bankrupt':
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(150, now);
-      osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
-      gain.gain.setValueAtTime(0.3, now);
-      gain.gain.linearRampToValueAtTime(0, now + 0.5);
-      osc.start(now);
-      osc.stop(now + 0.5);
-      break;
-    case 'spin':
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(400, now);
-      osc.frequency.linearRampToValueAtTime(800, now + 0.2);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.linearRampToValueAtTime(0, now + 0.2);
-      osc.start(now);
-      osc.stop(now + 0.2);
-      break;
-    case 'click':
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(600, now);
-      osc.frequency.exponentialRampToValueAtTime(300, now + 0.05);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.linearRampToValueAtTime(0, now + 0.05);
-      osc.start(now);
-      osc.stop(now + 0.05);
-      break;
-    default:
-      break;
-  }
-};
-
-// --- CONFIGURAZIONE E UTILS ---
-
-const DATABASE_FRASI = {
-  "PROVERBIO": ["CHI DORME NON PIGLIA PESCI", "ROSSO DI SERA BEL TEMPO SI SPERA", "A CAVAL DONATO NON SI GUARDA IN BOCCA", "TENTAR NON NUOCE", "L ERBA DEL VICINO E SEMPRE PIU VERDE"],
-  "TITOLO FILM": ["RITORNO AL FUTURO", "HARRY POTTER E LA PIETRA FILOSOFALE", "IL SIGNORE DEGLI ANELLI", "PIRATI DEI CARAIBI", "LA DOLCE VITA", "AVATAR LA VIA DELL ACQUA"],
-  "PERSONAGGIO FAMOSO": ["GERRY SCOTTI", "CRISTIANO RONALDO", "LEONARDO DA VINCI", "MARILYN MONROE", "VASCO ROSSI", "PAPA FRANCESCO"],
-  "LUOGO": ["LA TORRE DI PISA", "IL COLOSSEO DI ROMA", "STATUA DELLA LIBERTA", "GRANDE MURAGLIA CINESE", "PIAZZA DEL DUOMO", "TORRE EIFFEL"],
-  "VIDEOGIOCHI & ROBLOX": ["ADOPT ME SU ROBLOX", "BROOKHAVEN RP", "SUPER MARIO ODYSSEY", "FORTNITE BATTLE ROYALE", "POKEMON SCARLATTO E VIOLETTO", "MINECRAFT"],
-  "CURIOSITÀ": ["I GATTI HANNO SETTE VITE", "IL MIELE NON SCADE MAI", "LE FORMICHE NON DORMONO", "L OCCHIO DELLO STRUZZO", "I FULMINI SCALDANO L ARIA"],
-  "COSA": ["MACCHINA DEL CAFFE", "TELECOMANDO DELLA TV", "SCARPE DA GINNASTICA", "OCCHIALI DA SOLE", "SPAZZOLINO E DENTIFRICIO"]
-};
-
-// Configurazione Ruota
-const WHEEL_SEGMENTS = [
-  { label: "BANCAROTTA", display: "💀", value: 0, color: "#000000", textColor: "red", type: "bankrupt" },
-  { label: "€100", display: "100", value: 100, color: "#FFD700", textColor: "black", type: "cash" },
-  { label: "€300", display: "300", value: 300, color: "#FF69B4", textColor: "white", type: "cash" },
-  { label: "€600", display: "600", value: 600, color: "#DC143C", textColor: "white", type: "cash" },
-  { label: "PERDI TURNO", display: "⛔", value: 0, color: "#FFFFFF", textColor: "black", type: "lose_turn" },
-  { label: "€400", display: "400", value: 400, color: "#FFA500", textColor: "black", type: "cash" },
-  { label: "JOLLY", display: "🃏", value: 0, color: "#8A2BE2", textColor: "white", type: "jolly" },
-  { label: "€200", display: "200", value: 200, color: "#1E90FF", textColor: "white", type: "cash" },
-  { label: "€900", display: "900", value: 900, color: "#32CD32", textColor: "white", type: "cash" },
-  { label: "€250", display: "250", value: 250, color: "#FF69B4", textColor: "white", type: "cash" },
-  { label: "BANCAROTTA", display: "💀", value: 0, color: "#000000", textColor: "red", type: "bankrupt" },
-  { label: "€1.000", display: "1000", value: 1000, color: "#FFD700", textColor: "red", type: "cash", style: "border" },
-  { label: "€500", display: "500", value: 500, color: "#00CED1", textColor: "black", type: "cash" },
-  { label: "PREMIO", display: "🎁", value: 0, color: "#FF1493", textColor: "white", type: "prize" },
-  { label: "€350", display: "350", value: 350, color: "#9370DB", textColor: "white", type: "cash" },
-  { label: "€150", display: "150", value: 150, color: "#FF6347", textColor: "white", type: "cash" },
-  { label: "€700", display: "700", value: 700, color: "#20B2AA", textColor: "white", type: "cash" },
-  { label: "PERDI TURNO", display: "⛔", value: 0, color: "#FFFFFF", textColor: "black", type: "lose_turn" },
-  { label: "€450", display: "450", value: 450, color: "#FFA07A", textColor: "black", type: "cash" },
-  { label: "€200", display: "200", value: 200, color: "#1E90FF", textColor: "white", type: "cash" },
-  { label: "€800", display: "800", value: 800, color: "#32CD32", textColor: "white", type: "cash" },
-  { label: "€500", display: "500", value: 500, color: "#FFD700", textColor: "black", type: "cash" },
-  { label: "JOLLY", display: "🃏", value: 0, color: "#8A2BE2", textColor: "white", type: "jolly" },
-  { label: "€300", display: "300", value: 300, color: "#FF69B4", textColor: "white", type: "cash" },
-];
-
-const VOWEL_COST = 200;
-const SEGMENT_ANGLE = 360 / WHEEL_SEGMENTS.length;
-const FINAL_ROUND_TIME = 30;
-
-// --- FIREBASE SETUP ---
-const firebaseConfig = {
-  apiKey: "AIzaSyDfiQtouKP1h-XjWYR0woFnxPa5aJt5BPk",
-  authDomain: "ruotadeidingas.firebaseapp.com",
-  projectId: "ruotadeidingas",
-  storageBucket: "ruotadeidingas.firebasestorage.app",
-  messagingSenderId: "828483676740",
-  appId: "1:828483676740:web:a574d3290ff50717faaa11",
-  measurementId: "G-3K3QCDZ39P"
-};
-
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app); // Inizializza analytics come richiesto
-const auth = getAuth(app);
-const db = getFirestore(app);
-// Usiamo un ID statico se non siamo nell'ambiente di preview, altrimenti usiamo quello fornito
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'ruota-dei-dingas';
-
-// --- COMPONENTI UI ---
-
-const Button = ({ children, onClick, disabled, className = "", variant = "primary" }) => {
-  const baseStyle = "px-4 py-2 rounded-lg font-bold transition-all transform active:scale-95 shadow-lg border-2 flex items-center justify-center gap-2";
-  const variants = {
-    primary: "bg-gradient-to-b from-blue-600 to-blue-800 text-white border-blue-400 hover:from-blue-500 hover:to-blue-700 disabled:opacity-50 disabled:grayscale",
-    secondary: "bg-gradient-to-b from-gray-600 to-gray-800 text-white border-gray-500 hover:from-gray-500 hover:to-gray-700 disabled:opacity-50",
-    success: "bg-gradient-to-b from-green-500 to-green-700 text-white border-green-400 hover:from-green-400 hover:to-green-600 disabled:opacity-50",
-    danger: "bg-gradient-to-b from-red-500 to-red-700 text-white border-red-400 hover:from-red-400 hover:to-red-600 disabled:opacity-50",
-    gold: "bg-gradient-to-b from-yellow-400 to-yellow-600 text-black border-yellow-200 hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50",
-    ai: "bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 text-white border-purple-300 hover:scale-105 shadow-[0_0_15px_rgba(168,85,247,0.5)]",
-  };
-  return (
-    <button className={`${baseStyle} ${variants[variant]} ${className}`} onClick={() => { playSound('click'); onClick(); }} disabled={disabled}>
-      {children}
-    </button>
-  );
-};
-
-const LetterTile = ({ letter, revealed, isSpace, isPunctuation, userGuessLetter }) => {
-  if (isSpace) return <div className="w-2 md:w-4 h-10 md:h-14 bg-transparent" />;
-  if (isPunctuation) return (
-    <div className="w-6 h-10 md:w-10 md:h-14 flex items-center justify-center text-white font-bold text-2xl">
-      {letter}
-    </div>
-  );
-
-  let bgClass = 'bg-gradient-to-br from-blue-600 to-blue-900 text-transparent rotate-y-180';
-  let textClass = 'opacity-0';
-  let content = letter;
-
-  if (revealed) {
-    bgClass = 'bg-white text-black rotate-y-0';
-    textClass = 'opacity-100';
-  } else if (userGuessLetter) {
-    bgClass = 'bg-green-500 border-green-300 text-white rotate-y-0 shadow-[0_0_15px_rgba(34,197,94,0.6)]';
-    textClass = 'opacity-100';
-    content = userGuessLetter;
-  }
-
-  return (
-    <div className={`w-8 h-12 md:w-12 md:h-16 border-2 border-white shadow-md flex items-center justify-center text-xl md:text-3xl font-bold transition-all duration-700 transform perspective-1000 ${bgClass}`}>
-      <span className={textClass}>{content}</span>
-    </div>
-  );
-};
-
-const Wheel = ({ rotation, onSpinEnd, spinning }) => {
-  useEffect(() => {
-    let interval;
-    if (spinning) {
-        let count = 0;
-        interval = setInterval(() => {
-            count++;
-            if (count % Math.ceil(count/10 + 1) === 0) playSound('tick');
-        }, 100); 
-    }
-    return () => clearInterval(interval);
-  }, [spinning]);
-
-  return (
-    <div className="relative w-80 h-80 lg:w-[380px] lg:h-[380px] mx-auto my-4 shrink-0">
-      <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 w-8 h-12 flex flex-col items-center drop-shadow-2xl">
-          <div className="w-4 h-8 bg-red-600 rounded-b-full border-2 border-white"></div>
-      </div>
-      <div 
-        className="w-full h-full rounded-full border-8 border-gray-300 shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden transition-transform ease-[cubic-bezier(0.1,0.7,0.1,1)] bg-white relative"
-        style={{ transform: `rotate(${rotation}deg)`, transitionDuration: spinning ? '5s' : '0s' }}
-        onTransitionEnd={onSpinEnd}
-      >
-        {WHEEL_SEGMENTS.map((seg, i) => (
-          <div
-            key={i}
-            className="absolute top-0 left-1/2 w-1/2 h-1/2 origin-bottom-left border-l border-white/20"
-            style={{
-              transform: `rotate(${i * SEGMENT_ANGLE}deg) skewY(-${90 - SEGMENT_ANGLE}deg)`,
-              background: seg.color,
-            }}
-          >
-            <div 
-              className="absolute w-full h-full text-center flex items-center justify-end"
-              style={{ 
-                 transform: `skewY(${90 - SEGMENT_ANGLE}deg) rotate(${SEGMENT_ANGLE/2}deg)`,
-                 transformOrigin: "bottom left"
-              }}
-            >
-                <div 
-                    className="font-black whitespace-nowrap drop-shadow-md flex items-center justify-center"
-                    style={{ 
-                        color: seg.textColor,
-                        transform: "translate(-20px, 0) rotate(90deg)",
-                        fontSize: seg.display.length > 3 ? "14px" : "24px",
-                        width: "100px",
-                        textAlign: "center"
-                    }}
-                >
-                    {seg.display}
-                </div>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-900 rounded-full shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] z-20 flex items-center justify-center border-4 border-gray-200">
-        <Sparkles size={24} className="text-yellow-400 animate-pulse" />
-      </div>
-    </div>
-  );
-};
-
-// --- APP COMPONENT ---
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [roomCode, setRoomCode] = useState('');
-  const [playerName, setPlayerName] = useState('');
-  const [gameState, setGameState] = useState(null);
-  const [gameData, setGameData] = useState(null);
-  const [error, setError] = useState('');
-  const [hostComment, setHostComment] = useState("");
-  
-  // SOLVE MODE STATE
-  const [isSolving, setIsSolving] = useState(false);
-  const [solveBuffer, setSolveBuffer] = useState('');
-  const solveInputRef = useRef(null);
-  
-  // Final Round State
-  const [finalConsonants, setFinalConsonants] = useState([]);
-  const [finalVowel, setFinalVowel] = useState(null);
-  const [finalGuess, setFinalGuess] = useState("");
-  const [finalTimer, setFinalTimer] = useState(FINAL_ROUND_TIME);
-
-  const bgStyle = "min-h-screen bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900 via-purple-950 to-black text-white font-sans overflow-x-hidden";
-
-  useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-    return onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!user || !roomCode) return;
-    const unsub = onSnapshot(
-      doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setGameData(data);
-          setGameState(data.status);
-          if(data.hostComment) setHostComment(data.hostComment);
-        } else {
-          setError("Stanza non trovata.");
-          setGameState(null);
-        }
-      },
-      (err) => console.error("Sync error:", err)
-    );
-    return () => unsub();
-  }, [user, roomCode]);
-
-  useEffect(() => {
-    if (gameState === 'final_guess' && gameData?.finalEndTime) {
-      const interval = setInterval(() => {
-        const now = Date.now();
-        const left = Math.ceil((gameData.finalEndTime - now) / 1000);
-        if (left <= 0) {
-            setFinalTimer(0);
-            clearInterval(interval);
-        } else {
-            setFinalTimer(left);
-        }
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [gameState, gameData?.finalEndTime]);
-
-  useEffect(() => {
-    if (isSolving && solveInputRef.current) {
-        solveInputRef.current.focus();
-    }
-  }, [isSolving]);
-
-  // --- LOGICA ---
-
-  const createLobby = async (useAI = false) => {
-    if (!playerName.trim()) return setError("Inserisci il tuo nome per giocare!");
-    setError('');
-
-    try {
-        let puzzle = getRandomPuzzle();
-        
-        if (useAI) {
-          setAiLoading(true);
-          const aiPuzzle = await generateAiPuzzle();
-          if (aiPuzzle) {
-            puzzle = aiPuzzle;
-          } else {
-            console.warn("AI Fallback");
-          }
-          setAiLoading(false);
-        }
-
-        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-        const newGame = {
-          code,
-          hostId: user.uid,
-          status: 'lobby',
-          players: [{ uid: user.uid, name: playerName.trim(), score: 0, totalScore: 0, jolly: 0 }],
-          round: 1,
-          currentTurnIndex: 0,
-          puzzle: puzzle,
-          revealedIndices: [],
-          guessedLetters: [],
-          wheelRotation: 0,
-          wheelSpinning: false,
-          lastAction: "Benvenuti alla Ruota!",
-          hostComment: "Benvenuti a tutti! Chi vincerà oggi?",
-          currentWheelValue: null, 
-          phase: 'spin',
-          winnerId: null,
-          finalStage: null
         };
-        
-        const rev = [];
-        newGame.puzzle.phrase.split('').forEach((c, i) => {
-            if(!/[A-Z]/.test(c)) rev.push(i);
-        });
-        newGame.revealedIndices = rev;
 
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', code), newGame);
-        setRoomCode(code);
-    } catch (e) {
-        console.error(e);
-        setError("Errore nella creazione della partita. Riprova.");
-        setAiLoading(false);
-    }
-  };
+        const generateHostCommentary = async (gameState, lastAction) => {
+          try {
+            if (!apiKey) return "Che tensione in studio! Chi vincerà? 🎤";
+            const prompt = `Sei il conduttore carismatico ed energico di un gioco televisivo simile alla Ruota della Fortuna (tipo Gerry Scotti o Mike Bongiorno).
+            
+            Situazione attuale:
+            - Ultima azione: "${lastAction}"
+            - Turno di: ${gameState.currentPlayerName}
+            - Punteggio attuale: €${gameState.currentScore}
+            
+            Genera un commento brevissimo (massimo 15 parole), divertente, empatico o leggermente sarcastico in italiano per commentare l'azione. Usa delle emoji.`;
 
-  const joinLobby = async () => {
-    if (!playerName.trim() || !roomCode) return setError("Nome o codice mancanti!");
-    try {
-        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode);
-        await updateDoc(roomRef, {
-            players: arrayUnion({ uid: user.uid, name: playerName.trim(), score: 0, totalScore: 0, jolly: 0 })
-        });
-    } catch (e) { setError("Errore di connessione o stanza inesistente."); }
-  };
-
-  const spinWheel = async () => {
-    if ((gameData.phase !== 'spin' && gameData.phase !== 'action') || gameData.wheelSpinning) return;
-    playSound('spin');
-    const extraSpins = 1080 + Math.floor(Math.random() * 360);
-    const totalRotation = gameData.wheelRotation + extraSpins;
-    
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
-      wheelRotation: totalRotation,
-      wheelSpinning: true,
-      phase: 'spin', 
-      lastAction: `GIRA LA RUOTA!`
-    });
-  };
-
-  // AI HOST TRIGGER
-  const triggerHostCommentary = async () => {
-    if (aiLoading) return;
-    setAiLoading(true);
-    const player = gameData.players[gameData.currentTurnIndex];
-    const comment = await generateHostCommentary({
-       currentPlayerName: player.name,
-       currentScore: player.score,
-    }, gameData.lastAction);
-    
-    // Update DB so everyone sees the comment
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
-        hostComment: comment
-    });
-    setAiLoading(false);
-  };
-
-  const handleSpinEnd = async () => {
-    if (gameData.hostId !== user.uid) return;
-    const normalizedRotation = gameData.wheelRotation % 360;
-    const segmentIndex = Math.floor(((360 - normalizedRotation) % 360) / SEGMENT_ANGLE);
-    const segment = WHEEL_SEGMENTS[segmentIndex];
-    
-    let updates = { 
-        wheelSpinning: false, 
-        currentWheelValue: segment 
-    };
-    const player = gameData.players[gameData.currentTurnIndex];
-
-    if (segment.type === 'bankrupt') {
-        playSound('bankrupt');
-        const newPlayers = [...gameData.players];
-        newPlayers[gameData.currentTurnIndex].score = 0;
-        if(player.jolly > 0) newPlayers[gameData.currentTurnIndex].jolly = 0;
-        updates.players = newPlayers;
-        updates.lastAction = "BANCAROTTA! Perdi tutto!";
-        updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length;
-        updates.phase = 'spin';
-    } else if (segment.type === 'lose_turn') {
-        playSound('wrong');
-        if (player.jolly > 0) {
-             const newPlayers = [...gameData.players];
-             newPlayers[gameData.currentTurnIndex].jolly -= 1;
-             updates.players = newPlayers;
-             updates.lastAction = "PERDI TURNO... Ma usi il JOLLY! Salvo!";
-             updates.phase = 'spin';
-        } else {
-            updates.lastAction = "PERDI IL TURNO! Avanti un altro.";
-            updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length;
-            updates.phase = 'spin';
-        }
-    } else {
-        playSound('correct');
-        updates.lastAction = `${segment.label}! Chiama una consonante.`;
-        updates.phase = 'guess';
-    }
-
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), updates);
-  };
-
-  const guessConsonant = async (letter) => {
-    const phrase = gameData.puzzle.phrase;
-    let count = 0;
-    const newRevealed = [...gameData.revealedIndices];
-    phrase.split('').forEach((char, idx) => {
-      if (char === letter) { count++; if (!newRevealed.includes(idx)) newRevealed.push(idx); }
-    });
-
-    let updates = { guessedLetters: arrayUnion(letter), revealedIndices: newRevealed };
-    const player = gameData.players[gameData.currentTurnIndex];
-    const newPlayers = [...gameData.players];
-
-    if (count > 0) {
-      playSound('correct');
-      if (gameData.currentWheelValue.type === 'cash') {
-          const val = gameData.currentWheelValue.value;
-          newPlayers[gameData.currentTurnIndex].score += (val * count);
-          updates.lastAction = `Si! Ci sono ${count} ${letter}. Vinci €${val * count}.`;
-      } else if (gameData.currentWheelValue.type === 'jolly') {
-          newPlayers[gameData.currentTurnIndex].jolly += 1;
-          updates.lastAction = `Si! Guadagni un JOLLY!`;
-      } else if (gameData.currentWheelValue.type === 'prize') {
-          updates.lastAction = `Si! Vinci il PREMIO SPECIALE!`;
-      }
-      updates.players = newPlayers;
-      updates.phase = 'action';
-    } else {
-      playSound('wrong');
-      if (player.jolly > 0) {
-          if (window.confirm("Lettera sbagliata! Usare il Jolly?")) {
-              newPlayers[gameData.currentTurnIndex].jolly -= 1;
-              updates.players = newPlayers;
-              updates.lastAction = `JOLLY usato! Ancora il tuo turno.`;
-              updates.phase = 'spin';
-          } else {
-              updates.lastAction = `No, nessuna ${letter}. Turno passa.`;
-              updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length;
-              updates.phase = 'spin';
+            const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: prompt }] }]
+                })
+              }
+            );
+            
+            const data = await response.json();
+            return data.candidates[0].content.parts[0].text;
+          } catch (error) {
+            console.error("Gemini Commentary Error:", error);
+            return "Che tensione in studio! Chi vincerà? 🎤";
           }
-      } else {
-          updates.lastAction = `No, nessuna ${letter}. Turno passa.`;
-          updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length;
-          updates.phase = 'spin';
-      }
-    }
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), updates);
-  };
+        };
 
-  const buyVowel = async (letter) => {
-    const player = gameData.players[gameData.currentTurnIndex];
-    if (player.score < VOWEL_COST) return;
-    const newPlayers = [...gameData.players];
-    newPlayers[gameData.currentTurnIndex].score -= VOWEL_COST;
-    let count = 0;
-    const newRevealed = [...gameData.revealedIndices];
-    gameData.puzzle.phrase.split('').forEach((char, idx) => {
-      if (char === letter) { count++; if (!newRevealed.includes(idx)) newRevealed.push(idx); }
-    });
-    let updates = { players: newPlayers, guessedLetters: arrayUnion(letter), revealedIndices: newRevealed, lastAction: count > 0 ? `Trovate ${count} ${letter}.` : `Nessuna ${letter}. Turno passa.`, phase: count > 0 ? 'action' : 'spin' };
-    if (count > 0) playSound('correct');
-    else { playSound('wrong'); updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length; }
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), updates);
-  };
+        // --- SISTEMA AUDIO (Web Audio API) ---
+        const audioCtx = typeof window !== 'undefined' ? new (window.AudioContext || window.webkitAudioContext)() : null;
 
-  // --- LOGICA RISOLUZIONE ---
+        const playSound = (type) => {
+          if (!audioCtx) return;
+          if (audioCtx.state === 'suspended') audioCtx.resume();
 
-  const openSolveMode = () => {
-      setIsSolving(true);
-      setSolveBuffer("");
-      setTimeout(() => solveInputRef.current?.focus(), 100);
-  };
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          const now = audioCtx.currentTime;
 
-  const handleSolveInput = (e) => {
-      const val = e.target.value.toUpperCase();
-      const hiddenCount = gameData.puzzle.phrase.split('').filter((c, i) => 
-          /[A-Z]/.test(c) && !gameData.revealedIndices.includes(i)
-      ).length;
-      
-      if (val.length <= hiddenCount) {
-          setSolveBuffer(val);
-          playSound('click');
-      }
-  };
+          switch (type) {
+            case 'tick':
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(200, now);
+              osc.frequency.exponentialRampToValueAtTime(50, now + 0.05);
+              gain.gain.setValueAtTime(0.3, now);
+              gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+              osc.start(now);
+              osc.stop(now + 0.05);
+              break;
+            case 'correct':
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(523.25, now);
+              osc.frequency.setValueAtTime(659.25, now + 0.1);
+              osc.frequency.setValueAtTime(783.99, now + 0.2);
+              osc.frequency.setValueAtTime(1046.50, now + 0.3);
+              gain.gain.setValueAtTime(0.1, now);
+              gain.gain.linearRampToValueAtTime(0, now + 0.8);
+              osc.start(now);
+              osc.stop(now + 0.8);
+              break;
+            case 'wrong':
+              osc.type = 'sawtooth';
+              osc.frequency.setValueAtTime(100, now);
+              osc.frequency.linearRampToValueAtTime(80, now + 0.3);
+              gain.gain.setValueAtTime(0.2, now);
+              gain.gain.linearRampToValueAtTime(0, now + 0.3);
+              osc.start(now);
+              osc.stop(now + 0.3);
+              break;
+            case 'bankrupt':
+              osc.type = 'square';
+              osc.frequency.setValueAtTime(150, now);
+              osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
+              gain.gain.setValueAtTime(0.3, now);
+              gain.gain.linearRampToValueAtTime(0, now + 0.5);
+              osc.start(now);
+              osc.stop(now + 0.5);
+              break;
+            case 'spin':
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(400, now);
+              osc.frequency.linearRampToValueAtTime(800, now + 0.2);
+              gain.gain.setValueAtTime(0.2, now);
+              gain.gain.linearRampToValueAtTime(0, now + 0.2);
+              osc.start(now);
+              osc.stop(now + 0.2);
+              break;
+            case 'click':
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(600, now);
+              osc.frequency.exponentialRampToValueAtTime(300, now + 0.05);
+              gain.gain.setValueAtTime(0.1, now);
+              gain.gain.linearRampToValueAtTime(0, now + 0.05);
+              osc.start(now);
+              osc.stop(now + 0.05);
+              break;
+            default:
+              break;
+          }
+        };
 
-  const submitSolve = async () => {
-    let bufferIndex = 0;
-    const reconstructed = gameData.puzzle.phrase.split('').map((char, i) => {
-        if (!/[A-Z]/.test(char) || gameData.revealedIndices.includes(i)) {
-            return char;
-        }
-        const userChar = solveBuffer[bufferIndex] || '';
-        bufferIndex++;
-        return userChar;
-    }).join('');
-    
-    if (bufferIndex > 0 && bufferIndex > solveBuffer.length) {
-        if(!window.confirm("Non hai riempito tutte le lettere. Confermi lo stesso?")) return;
-    }
+        // --- CONFIGURAZIONE E UTILS ---
 
-    if (reconstructed === gameData.puzzle.phrase) {
-        playSound('correct');
-        const newPlayers = [...gameData.players];
-        newPlayers[gameData.currentTurnIndex].totalScore += newPlayers[gameData.currentTurnIndex].score;
-        
-        if (gameData.round >= 3) {
-            const winner = newPlayers.reduce((p, c) => p.totalScore > c.totalScore ? p : c);
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
-                status: 'final_lobby',
-                winnerId: winner.uid,
-                players: newPlayers,
-                puzzle: getRandomPuzzle(),
-                lastAction: `Il CAMPIONE è ${winner.name}!`
+        const DATABASE_FRASI = {
+          "PROVERBIO": [
+            "CHI DORME NON PIGLIA PESCI", 
+            "ROSSO DI SERA BEL TEMPO SI SPERA", 
+            "A CAVAL DONATO NON SI GUARDA IN BOCCA", 
+            "TENTAR NON NUOCE", 
+            "L ERBA DEL VICINO E SEMPRE PIU VERDE",
+            "CHI VA PIANO VA SANO E VA LONTANO",
+            "MEGLIO UN UOVO OGGI CHE UNA GALLINA DOMANI",
+            "TRA IL DIRE E IL FARE C E DI MEZZO IL MARE",
+            "CHI LASCIA LA VECCHIA STRADA PER LA NUOVA",
+            "NON E TUTTO ORO QUEL CHE LUCCICA",
+            "BUON SANGUE NON MENTE",
+            "L OSPITE E COME IL PESCE DOPO TRE GIORNI PUZZA"
+          ],
+          "TITOLO FILM": [
+            "RITORNO AL FUTURO", 
+            "HARRY POTTER E LA PIETRA FILOSOFALE", 
+            "IL SIGNORE DEGLI ANELLI", 
+            "PIRATI DEI CARAIBI", 
+            "LA DOLCE VITA", 
+            "AVATAR LA VIA DELL ACQUA",
+            "MAMMA HO PERSO L AEREO",
+            "ALLA RICERCA DI NEMO",
+            "IL DIAVOLO VESTE PRADA",
+            "NON CI RESTA CHE PIANGERE",
+            "TRE UOMINI E UNA GAMBA",
+            "FANTOZZI CONTRO TUTTI",
+            "ET L EXTRATERRESTRE"
+          ],
+          "PERSONAGGIO FAMOSO": [
+            "GERRY SCOTTI", 
+            "CRISTIANO RONALDO", 
+            "LEONARDO DA VINCI", 
+            "MARILYN MONROE", 
+            "VASCO ROSSI", 
+            "PAPA FRANCESCO",
+            "FIORELLO",
+            "SFERA EBBASTA",
+            "GIANLUIGI BUFFON",
+            "ELON MUSK",
+            "DANTE ALIGHIERI",
+            "RITA LEVI MONTALCINI",
+            "ROBERTO BENIGNI"
+          ],
+          "LUOGO": [
+            "LA TORRE DI PISA", 
+            "IL COLOSSEO DI ROMA", 
+            "STATUA DELLA LIBERTA", 
+            "GRANDE MURAGLIA CINESE", 
+            "PIAZZA DEL DUOMO", 
+            "TORRE EIFFEL",
+            "PONTE VECCHIO FIRENZE",
+            "CANAL GRANDE VENEZIA",
+            "MONTE VESUVIO NAPOLI",
+            "TRIANGOLO DELLE BERMUDA",
+            "CASCATE DEL NIAGARA",
+            "MACHU PICCHU PERU",
+            "DESERTO DEL SAHARA"
+          ],
+          "VIDEOGIOCHI & ROBLOX": [
+            "ADOPT ME SU ROBLOX", 
+            "BROOKHAVEN RP", 
+            "SUPER MARIO ODYSSEY", 
+            "FORTNITE BATTLE ROYALE", 
+            "POKEMON SCARLATTO E VIOLETTO", 
+            "MINECRAFT",
+            "AMONG US",
+            "CLASH ROYALE",
+            "BRAWL STARS",
+            "MURDER MYSTERY DUE",
+            "TOWER OF HELL",
+            "THE LEGEND OF ZELDA",
+            "RAINBOW FRIENDS"
+          ],
+          "CURIOSITÀ": [
+            "I GATTI HANNO SETTE VITE", 
+            "IL MIELE NON SCADE MAI", 
+            "LE FORMICHE NON DORMONO", 
+            "L OCCHIO DELLO STRUZZO", 
+            "I FULMINI SCALDANO L ARIA",
+            "I DELFINI DORMONO CON UN OCCHIO APERTO",
+            "LE NUVOLE PESANO TANTISSIMO",
+            "IL POMODORO E UN FRUTTO",
+            "LE FARFALLE SENTONO I SAPORI CON I PIEDI",
+            "GLI SQUALI NON HANNO OSSA",
+            "VENERE GIRA AL CONTRARIO"
+          ],
+          "COSA": [
+            "MACCHINA DEL CAFFE", 
+            "TELECOMANDO DELLA TV", 
+            "SCARPE DA GINNASTICA", 
+            "OCCHIALI DA SOLE", 
+            "SPAZZOLINO E DENTIFRICIO",
+            "PIZZA MARGHERITA",
+            "ALBERO DI NATALE",
+            "PANINO COL SALAME",
+            "CONSOLE PER VIDEOGIOCHI",
+            "ASCIUGACAPELLI PROFESSIONALE",
+            "TELESCOPIO ASTRONOMICO",
+            "LAMPADARIO DI CRISTALLO"
+          ]
+        };
+
+        // Configurazione Ruota
+        const WHEEL_SEGMENTS = [
+          { label: "BANCAROTTA", display: "💀", value: 0, color: "#000000", textColor: "red", type: "bankrupt" },
+          { label: "€100", display: "100", value: 100, color: "#FFD700", textColor: "black", type: "cash" },
+          { label: "€300", display: "300", value: 300, color: "#FF69B4", textColor: "white", type: "cash" },
+          { label: "€600", display: "600", value: 600, color: "#DC143C", textColor: "white", type: "cash" },
+          { label: "PERDI TURNO", display: "⛔", value: 0, color: "#FFFFFF", textColor: "black", type: "lose_turn" },
+          { label: "€400", display: "400", value: 400, color: "#FFA500", textColor: "black", type: "cash" },
+          { label: "JOLLY", display: "🃏", value: 0, color: "#8A2BE2", textColor: "white", type: "jolly" },
+          { label: "€200", display: "200", value: 200, color: "#1E90FF", textColor: "white", type: "cash" },
+          { label: "€900", display: "900", value: 900, color: "#32CD32", textColor: "white", type: "cash" },
+          { label: "€250", display: "250", value: 250, color: "#FF69B4", textColor: "white", type: "cash" },
+          { label: "BANCAROTTA", display: "💀", value: 0, color: "#000000", textColor: "red", type: "bankrupt" },
+          { label: "€1.000", display: "1000", value: 1000, color: "#FFD700", textColor: "red", type: "cash", style: "border" },
+          { label: "€500", display: "500", value: 500, color: "#00CED1", textColor: "black", type: "cash" },
+          { label: "PREMIO", display: "🎁", value: 0, color: "#FF1493", textColor: "white", type: "prize" },
+          { label: "€350", display: "350", value: 350, color: "#9370DB", textColor: "white", type: "cash" },
+          { label: "€150", display: "150", value: 150, color: "#FF6347", textColor: "white", type: "cash" },
+          { label: "€700", display: "700", value: 700, color: "#20B2AA", textColor: "white", type: "cash" },
+          { label: "PERDI TURNO", display: "⛔", value: 0, color: "#FFFFFF", textColor: "black", type: "lose_turn" },
+          { label: "€450", display: "450", value: 450, color: "#FFA07A", textColor: "black", type: "cash" },
+          { label: "€200", display: "200", value: 200, color: "#1E90FF", textColor: "white", type: "cash" },
+          { label: "€800", display: "800", value: 800, color: "#32CD32", textColor: "white", type: "cash" },
+          { label: "€500", display: "500", value: 500, color: "#FFD700", textColor: "black", type: "cash" },
+          { label: "JOLLY", display: "🃏", value: 0, color: "#8A2BE2", textColor: "white", type: "jolly" },
+          { label: "€300", display: "300", value: 300, color: "#FF69B4", textColor: "white", type: "cash" },
+        ];
+
+        const VOWEL_COST = 200;
+        const SEGMENT_ANGLE = 360 / WHEEL_SEGMENTS.length;
+        const FINAL_ROUND_TIME = 30;
+
+        // --- FIREBASE SETUP ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyDfiQtouKP1h-XjWYR0woFnxPa5aJt5BPk",
+          authDomain: "ruotadeidingas.firebaseapp.com",
+          projectId: "ruotadeidingas",
+          storageBucket: "ruotadeidingas.firebasestorage.app",
+          messagingSenderId: "828483676740",
+          appId: "1:828483676740:web:a574d3290ff50717faaa11",
+          measurementId: "G-3K3QCDZ39P"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'ruota-dei-dingas';
+
+        // --- COMPONENTI UI ---
+
+        const Button = ({ children, onClick, disabled, className = "", variant = "primary" }) => {
+          const baseStyle = "px-4 py-2 rounded-lg font-bold transition-all transform active:scale-95 shadow-lg border-2 flex items-center justify-center gap-2";
+          const variants = {
+            primary: "bg-gradient-to-b from-blue-600 to-blue-800 text-white border-blue-400 hover:from-blue-500 hover:to-blue-700 disabled:opacity-50 disabled:grayscale",
+            secondary: "bg-gradient-to-b from-gray-600 to-gray-800 text-white border-gray-500 hover:from-gray-500 hover:to-gray-700 disabled:opacity-50",
+            success: "bg-gradient-to-b from-green-500 to-green-700 text-white border-green-400 hover:from-green-400 hover:to-green-600 disabled:opacity-50",
+            danger: "bg-gradient-to-b from-red-500 to-red-700 text-white border-red-400 hover:from-red-400 hover:to-red-600 disabled:opacity-50",
+            gold: "bg-gradient-to-b from-yellow-400 to-yellow-600 text-black border-yellow-200 hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50",
+            ai: "bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 text-white border-purple-300 hover:scale-105 shadow-[0_0_15px_rgba(168,85,247,0.5)]",
+          };
+          return (
+            <button className={`${baseStyle} ${variants[variant]} ${className}`} onClick={() => { playSound('click'); onClick(); }} disabled={disabled}>
+              {children}
+            </button>
+          );
+        };
+
+        const LetterTile = ({ letter, revealed, isSpace, isPunctuation, userGuessLetter }) => {
+          if (isSpace) return <div className="w-2 md:w-4 h-10 md:h-14 bg-transparent" />;
+          if (isPunctuation) return (
+            <div className="w-6 h-10 md:w-10 md:h-14 flex items-center justify-center text-white font-bold text-2xl">
+              {letter}
+            </div>
+          );
+
+          let bgClass = 'bg-gradient-to-br from-blue-600 to-blue-900 text-transparent rotate-y-180';
+          let textClass = 'opacity-0';
+          let content = letter;
+
+          if (revealed) {
+            bgClass = 'bg-white text-black rotate-y-0';
+            textClass = 'opacity-100';
+          } else if (userGuessLetter) {
+            bgClass = 'bg-green-500 border-green-300 text-white rotate-y-0 shadow-[0_0_15px_rgba(34,197,94,0.6)]';
+            textClass = 'opacity-100';
+            content = userGuessLetter;
+          }
+
+          return (
+            <div className={`w-8 h-12 md:w-12 md:h-16 border-2 border-white shadow-md flex items-center justify-center text-xl md:text-3xl font-bold transition-all duration-700 transform perspective-1000 ${bgClass}`}>
+              <span className={textClass}>{content}</span>
+            </div>
+          );
+        };
+
+        const Wheel = ({ rotation, onSpinEnd, spinning }) => {
+          useEffect(() => {
+            let interval;
+            if (spinning) {
+                let count = 0;
+                interval = setInterval(() => {
+                    count++;
+                    if (count % Math.ceil(count/10 + 1) === 0) playSound('tick');
+                }, 100); 
+            }
+            return () => clearInterval(interval);
+          }, [spinning]);
+
+          return (
+            <div className="relative w-80 h-80 lg:w-[380px] lg:h-[380px] mx-auto my-4 shrink-0">
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 w-8 h-12 flex flex-col items-center drop-shadow-2xl">
+                  <div className="w-4 h-8 bg-red-600 rounded-b-full border-2 border-white"></div>
+              </div>
+              <div 
+                className="w-full h-full rounded-full border-8 border-gray-300 shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden transition-transform ease-[cubic-bezier(0.1,0.7,0.1,1)] bg-white relative"
+                style={{ transform: `rotate(${rotation}deg)`, transitionDuration: spinning ? '5s' : '0s' }}
+                onTransitionEnd={onSpinEnd}
+              >
+                {WHEEL_SEGMENTS.map((seg, i) => (
+                  <div
+                    key={i}
+                    className="absolute top-0 left-1/2 w-1/2 h-1/2 origin-bottom-left border-l border-white/20"
+                    style={{
+                      transform: `rotate(${i * SEGMENT_ANGLE}deg) skewY(-${90 - SEGMENT_ANGLE}deg)`,
+                      background: seg.color,
+                    }}
+                  >
+                    <div 
+                      className="absolute w-full h-full text-center flex items-center justify-end"
+                      style={{ 
+                         transform: `skewY(${90 - SEGMENT_ANGLE}deg) rotate(${SEGMENT_ANGLE/2}deg)`,
+                         transformOrigin: "bottom left"
+                      }}
+                    >
+                        <div 
+                            className="font-black whitespace-nowrap drop-shadow-md flex items-center justify-center"
+                            style={{ 
+                                color: seg.textColor,
+                                transform: "translate(-20px, 0) rotate(90deg)",
+                                fontSize: seg.display.length > 3 ? "14px" : "24px",
+                                width: "100px",
+                                textAlign: "center"
+                            }}
+                        >
+                            {seg.display}
+                        </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-900 rounded-full shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] z-20 flex items-center justify-center border-4 border-gray-200">
+                <Sparkles size={24} className="text-yellow-400 animate-pulse" />
+              </div>
+            </div>
+          );
+        };
+
+        // --- APP COMPONENT ---
+
+        function App() {
+          const [user, setUser] = useState(null);
+          const [loading, setLoading] = useState(true);
+          const [aiLoading, setAiLoading] = useState(false);
+          const [roomCode, setRoomCode] = useState('');
+          const [playerName, setPlayerName] = useState('');
+          const [gameState, setGameState] = useState(null);
+          const [gameData, setGameData] = useState(null);
+          const [error, setError] = useState('');
+          const [hostComment, setHostComment] = useState("");
+          
+          // SOLVE MODE STATE
+          const [isSolving, setIsSolving] = useState(false);
+          const [solveBuffer, setSolveBuffer] = useState('');
+          const solveInputRef = useRef(null);
+          
+          // Final Round State
+          const [finalConsonants, setFinalConsonants] = useState([]);
+          const [finalVowel, setFinalVowel] = useState(null);
+          const [finalGuess, setFinalGuess] = useState("");
+          const [finalTimer, setFinalTimer] = useState(FINAL_ROUND_TIME);
+
+          const bgStyle = "min-h-screen bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900 via-purple-950 to-black text-white font-sans overflow-x-hidden";
+
+          useEffect(() => {
+            const initAuth = async () => {
+              try {
+                  await signInAnonymously(auth);
+              } catch (err) {
+                console.warn("Autenticazione fallita...", err);
+              }
+            };
+            initAuth();
+            return onAuthStateChanged(auth, (u) => {
+              setUser(u);
+              setLoading(false);
             });
-        } else {
-            const nextRound = gameData.round + 1;
-            const newPuzzle = getRandomPuzzle();
-            const rev = [];
-            newPuzzle.phrase.split('').forEach((c, i) => { if (!/[A-Z]/.test(c)) rev.push(i); });
+          }, []);
+
+          useEffect(() => {
+            if (!user || !roomCode) return;
+            const unsub = onSnapshot(
+              doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode),
+              (docSnap) => {
+                if (docSnap.exists()) {
+                  const data = docSnap.data();
+                  setGameData(data);
+                  setGameState(data.status);
+                  if(data.hostComment) setHostComment(data.hostComment);
+                } else {
+                  setError("Stanza non trovata.");
+                  setGameState(null);
+                }
+              },
+              (err) => console.error("Sync error:", err)
+            );
+            return () => unsub();
+          }, [user, roomCode]);
+
+          useEffect(() => {
+            if (gameState === 'final_guess' && gameData?.finalEndTime) {
+              const interval = setInterval(() => {
+                const now = Date.now();
+                const left = Math.ceil((gameData.finalEndTime - now) / 1000);
+                if (left <= 0) {
+                    setFinalTimer(0);
+                    clearInterval(interval);
+                } else {
+                    setFinalTimer(left);
+                }
+              }, 1000);
+              return () => clearInterval(interval);
+            }
+          }, [gameState, gameData?.finalEndTime]);
+
+          useEffect(() => {
+            if (isSolving && solveInputRef.current) {
+                solveInputRef.current.focus();
+            }
+          }, [isSolving]);
+
+          // --- LOGICA ---
+
+          const createLobby = async (useAI = false) => {
+            if (!playerName.trim()) return setError("Inserisci il tuo nome per giocare!");
+            setError('');
+
+            try {
+                let puzzle = getRandomPuzzle();
+                
+                if (useAI) {
+                  setAiLoading(true);
+                  const aiPuzzle = await generateAiPuzzle();
+                  if (aiPuzzle) {
+                    puzzle = aiPuzzle;
+                  } else {
+                    console.warn("AI Fallback");
+                  }
+                  setAiLoading(false);
+                }
+
+                const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+                const newGame = {
+                  code,
+                  hostId: user.uid,
+                  status: 'lobby',
+                  players: [{ uid: user.uid, name: playerName.trim(), score: 0, totalScore: 0, jolly: 0 }],
+                  round: 1,
+                  currentTurnIndex: 0,
+                  puzzle: puzzle,
+                  revealedIndices: [],
+                  guessedLetters: [],
+                  wheelRotation: 0,
+                  wheelSpinning: false,
+                  lastAction: "Benvenuti alla Ruota!",
+                  hostComment: "Benvenuti a tutti! Chi vincerà oggi?",
+                  currentWheelValue: null, 
+                  phase: 'spin',
+                  winnerId: null,
+                  finalStage: null
+                };
+                
+                const rev = [];
+                newGame.puzzle.phrase.split('').forEach((c, i) => {
+                    if(!/[A-Z]/.test(c)) rev.push(i);
+                });
+                newGame.revealedIndices = rev;
+
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', code), newGame);
+                setRoomCode(code);
+            } catch (e) {
+                console.error(e);
+                setError("Errore nella creazione della partita. Riprova.");
+                setAiLoading(false);
+            }
+          };
+
+          const joinLobby = async () => {
+            if (!playerName.trim() || !roomCode) return setError("Nome o codice mancanti!");
+            try {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode);
+                await updateDoc(roomRef, {
+                    players: arrayUnion({ uid: user.uid, name: playerName.trim(), score: 0, totalScore: 0, jolly: 0 })
+                });
+            } catch (e) { setError("Errore di connessione o stanza inesistente."); }
+          };
+
+          const spinWheel = async () => {
+            if ((gameData.phase !== 'spin' && gameData.phase !== 'action') || gameData.wheelSpinning) return;
+            playSound('spin');
+            const extraSpins = 1080 + Math.floor(Math.random() * 360);
+            const totalRotation = gameData.wheelRotation + extraSpins;
+            
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
-                round: nextRound,
-                players: newPlayers.map(p => ({...p, score: 0})),
-                puzzle: newPuzzle,
-                revealedIndices: rev,
-                guessedLetters: [],
-                phase: 'spin',
-                currentTurnIndex: (nextRound - 1) % newPlayers.length,
-                lastAction: `Inizia il Round ${nextRound}!`
+              wheelRotation: totalRotation,
+              wheelSpinning: true,
+              phase: 'spin', 
+              lastAction: `GIRA LA RUOTA!`
             });
-        }
-    } else {
-        playSound('wrong');
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
-            lastAction: "Soluzione ERRATA! Turno perso.",
-            currentTurnIndex: (gameData.currentTurnIndex + 1) % gameData.players.length,
-            phase: 'spin'
-        });
-    }
-    setIsSolving(false);
-    setSolveBuffer("");
-  };
+          };
 
-  // --- FINAL ROUND HELPERS ---
-  const startFinalRound = async () => {
-    const rstlne = ['R','S','T','L','N','E'];
-    const newRevealed = [];
-    gameData.puzzle.phrase.split('').forEach((c, i) => { if (rstlne.includes(c) || !/[A-Z]/.test(c)) newRevealed.push(i); });
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'final_selection', revealedIndices: newRevealed, guessedLetters: rstlne, lastAction: "Ecco le lettere d'ufficio: R S T L N E" });
-  };
+          // AI HOST TRIGGER
+          const triggerHostCommentary = async () => {
+            if (aiLoading) return;
+            setAiLoading(true);
+            const player = gameData.players[gameData.currentTurnIndex];
+            const comment = await generateHostCommentary({
+               currentPlayerName: player.name,
+               currentScore: player.score,
+            }, gameData.lastAction);
+            
+            // Update DB so everyone sees the comment
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
+                hostComment: comment
+            });
+            setAiLoading(false);
+          };
 
-  const confirmFinalSelection = async () => {
-      const userLetters = [...finalConsonants, finalVowel];
-      const allRevealed = [...gameData.revealedIndices];
-      gameData.puzzle.phrase.split('').forEach((c, i) => { if (userLetters.includes(c)) { if (!allRevealed.includes(i)) allRevealed.push(i); } });
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'final_guess', revealedIndices: allRevealed, guessedLetters: arrayUnion(...userLetters), finalEndTime: Date.now() + (FINAL_ROUND_TIME * 1000), lastAction: "30 SECONDI! Trova la soluzione!" });
-  };
+          const handleSpinEnd = async () => {
+            if (gameData.hostId !== user.uid) return;
+            const normalizedRotation = gameData.wheelRotation % 360;
+            const segmentIndex = Math.floor(((360 - normalizedRotation) % 360) / SEGMENT_ANGLE);
+            const segment = WHEEL_SEGMENTS[segmentIndex];
+            
+            let updates = { 
+                wheelSpinning: false, 
+                currentWheelValue: segment 
+            };
+            const player = gameData.players[gameData.currentTurnIndex];
 
-  const submitFinalGuess = async () => {
-      if (finalGuess.toUpperCase() === gameData.puzzle.phrase) {
-          playSound('correct');
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'final_win', lastAction: "INCREDIBILE! HAI VINTO!" });
-      }
-  };
+            if (segment.type === 'bankrupt') {
+                playSound('bankrupt');
+                const newPlayers = [...gameData.players];
+                newPlayers[gameData.currentTurnIndex].score = 0;
+                if(player.jolly > 0) newPlayers[gameData.currentTurnIndex].jolly = 0;
+                updates.players = newPlayers;
+                updates.lastAction = "BANCAROTTA! Perdi tutto!";
+                updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length;
+                updates.phase = 'spin';
+            } else if (segment.type === 'lose_turn') {
+                playSound('wrong');
+                if (player.jolly > 0) {
+                     const newPlayers = [...gameData.players];
+                     newPlayers[gameData.currentTurnIndex].jolly -= 1;
+                     updates.players = newPlayers;
+                     updates.lastAction = "PERDI TURNO... Ma usi il JOLLY! Salvo!";
+                     updates.phase = 'spin';
+                } else {
+                    updates.lastAction = "PERDI IL TURNO! Avanti un altro.";
+                    updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length;
+                    updates.phase = 'spin';
+                }
+            } else {
+                playSound('correct');
+                updates.lastAction = `${segment.label}! Chiama una consonante.`;
+                updates.phase = 'guess';
+            }
 
-  function getRandomPuzzle() {
-    const cats = Object.keys(DATABASE_FRASI);
-    const cat = cats[Math.floor(Math.random() * cats.length)];
-    const phs = DATABASE_FRASI[cat];
-    return { category: cat, phrase: phs[Math.floor(Math.random() * phs.length)] };
-  }
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  const vowels = "AEIOU".split("");
-  const consonants = alphabet.filter(l => !vowels.includes(l));
-  
-  const isMyTurn = gameData && user && gameData.players[gameData.currentTurnIndex].uid === user.uid;
-  const isHost = gameData && user && gameData.hostId === user.uid;
-  const isChampion = gameData && user && gameData.winnerId === user.uid;
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), updates);
+          };
 
-  // --- RENDERERS ---
+          const guessConsonant = async (letter) => {
+            const phrase = gameData.puzzle.phrase;
+            let count = 0;
+            const newRevealed = [...gameData.revealedIndices];
+            phrase.split('').forEach((char, idx) => {
+              if (char === letter) { count++; if (!newRevealed.includes(idx)) newRevealed.push(idx); }
+            });
 
-  const renderPuzzle = (mode = 'normal') => {
-      let globalIndex = 0;
-      let bufferIndex = 0;
+            let updates = { guessedLetters: arrayUnion(letter), revealedIndices: newRevealed };
+            const player = gameData.players[gameData.currentTurnIndex];
+            const newPlayers = [...gameData.players];
 
-      return (
-          <div className="bg-blue-950 p-4 md:p-8 rounded-xl border-[6px] border-blue-400 shadow-[0_0_30px_rgba(0,0,0,0.8)] mb-8 flex flex-wrap justify-center gap-x-4 gap-y-2 max-w-5xl mx-2 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] relative">
-             {gameData.puzzle.phrase.split(" ").map((word, wIdx) => {
-                 const wordElement = (
-                     <div key={wIdx} className="flex flex-nowrap gap-1">
-                         {word.split("").map((char, cIdx) => {
-                             const idx = globalIndex + cIdx;
-                             const isRevealed = gameData.revealedIndices.includes(idx);
-                             const isAlpha = /[A-Z]/.test(char);
-                             
-                             let displayChar = char;
-                             let userGuessChar = null;
+            if (count > 0) {
+              playSound('correct');
+              if (gameData.currentWheelValue.type === 'cash') {
+                  const val = gameData.currentWheelValue.value;
+                  newPlayers[gameData.currentTurnIndex].score += (val * count);
+                  updates.lastAction = `Si! Ci sono ${count} ${letter}. Vinci €${val * count}.`;
+              } else if (gameData.currentWheelValue.type === 'jolly') {
+                  newPlayers[gameData.currentTurnIndex].jolly += 1;
+                  updates.lastAction = `Si! Guadagni un JOLLY!`;
+              } else if (gameData.currentWheelValue.type === 'prize') {
+                  updates.lastAction = `Si! Vinci il PREMIO SPECIALE!`;
+              }
+              updates.players = newPlayers;
+              updates.phase = 'action';
+            } else {
+              playSound('wrong');
+              if (player.jolly > 0) {
+                  if (window.confirm("Lettera sbagliata! Usare il Jolly?")) {
+                      newPlayers[gameData.currentTurnIndex].jolly -= 1;
+                      updates.players = newPlayers;
+                      updates.lastAction = `JOLLY usato! Ancora il tuo turno.`;
+                      updates.phase = 'spin';
+                  } else {
+                      updates.lastAction = `No, nessuna ${letter}. Turno passa.`;
+                      updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length;
+                      updates.phase = 'spin';
+                  }
+              } else {
+                  updates.lastAction = `No, nessuna ${letter}. Turno passa.`;
+                  updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length;
+                  updates.phase = 'spin';
+              }
+            }
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), updates);
+          };
 
-                             if (mode === 'solve' && !isRevealed && isAlpha) {
-                                 userGuessChar = solveBuffer[bufferIndex] || "";
-                                 bufferIndex++;
-                             }
+          const buyVowel = async (letter) => {
+            const player = gameData.players[gameData.currentTurnIndex];
+            if (player.score < VOWEL_COST) return;
+            const newPlayers = [...gameData.players];
+            newPlayers[gameData.currentTurnIndex].score -= VOWEL_COST;
+            let count = 0;
+            const newRevealed = [...gameData.revealedIndices];
+            gameData.puzzle.phrase.split('').forEach((char, idx) => {
+              if (char === letter) { count++; if (!newRevealed.includes(idx)) newRevealed.push(idx); }
+            });
+            let updates = { players: newPlayers, guessedLetters: arrayUnion(letter), revealedIndices: newRevealed, lastAction: count > 0 ? `Trovate ${count} ${letter}.` : `Nessuna ${letter}. Turno passa.`, phase: count > 0 ? 'action' : 'spin' };
+            if (count > 0) playSound('correct');
+            else { playSound('wrong'); updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length; }
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), updates);
+          };
 
-                             return (
-                                 <LetterTile 
-                                     key={idx}
-                                     letter={displayChar}
-                                     revealed={isRevealed}
-                                     isSpace={false}
-                                     isPunctuation={!isAlpha}
-                                     userGuessLetter={userGuessChar}
-                                 />
-                             );
-                         })}
-                     </div>
-                 );
-                 globalIndex += word.length + 1; 
-                 return wordElement;
-             })}
-          </div>
-      );
-  };
+          // --- LOGICA RISOLUZIONE ---
 
-  const renderFinalPuzzle = () => {
-      let globalIndex = 0;
-      return (
-          <div className="bg-blue-950 p-6 rounded-xl border-4 border-yellow-600 shadow-2xl mb-8 flex flex-wrap justify-center gap-x-4 gap-y-2">
-               {gameData.puzzle.phrase.split(" ").map((word, wIdx) => {
-                 const wordElement = (
-                     <div key={wIdx} className="flex flex-nowrap gap-1">
-                         {word.split("").map((char, cIdx) => {
-                             const idx = globalIndex + cIdx;
-                             return (
-                                 <LetterTile 
-                                     key={idx}
-                                     letter={char}
-                                     revealed={gameData.revealedIndices.includes(idx) || gameState === 'final_win'}
-                                     isSpace={false}
-                                     isPunctuation={!/[A-Z]/.test(char)}
-                                 />
-                             );
-                         })}
-                     </div>
-                 );
-                 globalIndex += word.length + 1; 
-                 return wordElement;
-             })}
-          </div>
-      );
-  }
+          const openSolveMode = () => {
+              setIsSolving(true);
+              setSolveBuffer("");
+              setTimeout(() => solveInputRef.current?.focus(), 100);
+          };
 
-  if (loading) return <div className="flex h-screen items-center justify-center bg-black text-white">Caricamento Studio...</div>;
+          const handleSolveInput = (e) => {
+              const val = e.target.value.toUpperCase();
+              const hiddenCount = gameData.puzzle.phrase.split('').filter((c, i) => 
+                  /[A-Z]/.test(c) && !gameData.revealedIndices.includes(i)
+              ).length;
+              
+              if (val.length <= hiddenCount) {
+                  setSolveBuffer(val);
+                  playSound('click');
+              }
+          };
 
-  if (!gameState || gameState === 'lobby') {
-     return (
-        <div className={`${bgStyle} flex items-center justify-center p-4`}>
-            <div className="bg-blue-900/80 p-8 rounded-2xl border-4 border-yellow-500 max-w-lg w-full text-center shadow-2xl">
-                <h1 className="text-5xl font-black text-yellow-400 mb-2 drop-shadow-md">LA RUOTA</h1>
-                <p className="text-blue-200 mb-6 font-bold uppercase tracking-widest">Edizione Italiana</p>
-                {!roomCode ? (
-                    <div className="space-y-4">
-                        {error && (
-                            <div className="bg-red-500/20 border border-red-500 text-red-200 p-2 rounded text-sm animate-pulse font-bold">
-                                {error}
+          const submitSolve = async () => {
+            let bufferIndex = 0;
+            const reconstructed = gameData.puzzle.phrase.split('').map((char, i) => {
+                if (!/[A-Z]/.test(char) || gameData.revealedIndices.includes(i)) {
+                    return char;
+                }
+                const userChar = solveBuffer[bufferIndex] || '';
+                bufferIndex++;
+                return userChar;
+            }).join('');
+            
+            if (bufferIndex > 0 && bufferIndex > solveBuffer.length) {
+                if(!window.confirm("Non hai riempito tutte le lettere. Confermi lo stesso?")) return;
+            }
+
+            if (reconstructed === gameData.puzzle.phrase) {
+                playSound('correct');
+                const newPlayers = [...gameData.players];
+                newPlayers[gameData.currentTurnIndex].totalScore += newPlayers[gameData.currentTurnIndex].score;
+                
+                if (gameData.round >= 3) {
+                    const winner = newPlayers.reduce((p, c) => p.totalScore > c.totalScore ? p : c);
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
+                        status: 'final_lobby',
+                        winnerId: winner.uid,
+                        players: newPlayers,
+                        puzzle: getRandomPuzzle(),
+                        lastAction: `Il CAMPIONE è ${winner.name}!`
+                    });
+                } else {
+                    const nextRound = gameData.round + 1;
+                    const newPuzzle = getRandomPuzzle();
+                    const rev = [];
+                    newPuzzle.phrase.split('').forEach((c, i) => { if (!/[A-Z]/.test(c)) rev.push(i); });
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
+                        round: nextRound,
+                        players: newPlayers.map(p => ({...p, score: 0})),
+                        puzzle: newPuzzle,
+                        revealedIndices: rev,
+                        guessedLetters: [],
+                        phase: 'spin',
+                        currentTurnIndex: (nextRound - 1) % newPlayers.length,
+                        lastAction: `Inizia il Round ${nextRound}!`
+                    });
+                }
+            } else {
+                playSound('wrong');
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
+                    lastAction: "Soluzione ERRATA! Turno perso.",
+                    currentTurnIndex: (gameData.currentTurnIndex + 1) % gameData.players.length,
+                    phase: 'spin'
+                });
+            }
+            setIsSolving(false);
+            setSolveBuffer("");
+          };
+
+          // --- FINAL ROUND HELPERS ---
+          const startFinalRound = async () => {
+            const rstlne = ['R','S','T','L','N','E'];
+            const newRevealed = [];
+            gameData.puzzle.phrase.split('').forEach((c, i) => { if (rstlne.includes(c) || !/[A-Z]/.test(c)) newRevealed.push(i); });
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'final_selection', revealedIndices: newRevealed, guessedLetters: rstlne, lastAction: "Ecco le lettere d'ufficio: R S T L N E" });
+          };
+
+          const confirmFinalSelection = async () => {
+              const userLetters = [...finalConsonants, finalVowel];
+              const allRevealed = [...gameData.revealedIndices];
+              gameData.puzzle.phrase.split('').forEach((c, i) => { if (userLetters.includes(c)) { if (!allRevealed.includes(i)) allRevealed.push(i); } });
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'final_guess', revealedIndices: allRevealed, guessedLetters: arrayUnion(...userLetters), finalEndTime: Date.now() + (FINAL_ROUND_TIME * 1000), lastAction: "30 SECONDI! Trova la soluzione!" });
+          };
+
+          const submitFinalGuess = async () => {
+              if (finalGuess.toUpperCase() === gameData.puzzle.phrase) {
+                  playSound('correct');
+                  await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'final_win', lastAction: "INCREDIBILE! HAI VINTO!" });
+              }
+          };
+
+          function getRandomPuzzle() {
+            const cats = Object.keys(DATABASE_FRASI);
+            const cat = cats[Math.floor(Math.random() * cats.length)];
+            const phs = DATABASE_FRASI[cat];
+            return { category: cat, phrase: phs[Math.floor(Math.random() * phs.length)] };
+          }
+          const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+          const vowels = "AEIOU".split("");
+          const consonants = alphabet.filter(l => !vowels.includes(l));
+          
+          const isMyTurn = gameData && user && gameData.players[gameData.currentTurnIndex].uid === user.uid;
+          const isHost = gameData && user && gameData.hostId === user.uid;
+          const isChampion = gameData && user && gameData.winnerId === user.uid;
+
+          // --- RENDERERS ---
+
+          const renderPuzzle = (mode = 'normal') => {
+              let globalIndex = 0;
+              let bufferIndex = 0;
+
+              return (
+                  <div className="bg-blue-950 p-4 md:p-8 rounded-xl border-[6px] border-blue-400 shadow-[0_0_30px_rgba(0,0,0,0.8)] mb-8 flex flex-wrap justify-center gap-x-4 gap-y-2 max-w-5xl mx-2 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] relative">
+                     {gameData.puzzle.phrase.split(" ").map((word, wIdx) => {
+                         const wordElement = (
+                             <div key={wIdx} className="flex flex-nowrap gap-1">
+                                 {word.split("").map((char, cIdx) => {
+                                     const idx = globalIndex + cIdx;
+                                     const isRevealed = gameData.revealedIndices.includes(idx);
+                                     const isAlpha = /[A-Z]/.test(char);
+                                     
+                                     let displayChar = char;
+                                     let userGuessChar = null;
+
+                                     if (mode === 'solve' && !isRevealed && isAlpha) {
+                                         userGuessChar = solveBuffer[bufferIndex] || "";
+                                         bufferIndex++;
+                                     }
+
+                                     return (
+                                         <LetterTile 
+                                             key={idx}
+                                             letter={displayChar}
+                                             revealed={isRevealed}
+                                             isSpace={false}
+                                             isPunctuation={!isAlpha}
+                                             userGuessLetter={userGuessChar}
+                                         />
+                                     );
+                                 })}
+                             </div>
+                         );
+                         globalIndex += word.length + 1; 
+                         return wordElement;
+                     })}
+                  </div>
+              );
+          };
+
+          const renderFinalPuzzle = () => {
+              let globalIndex = 0;
+              return (
+                  <div className="bg-blue-950 p-6 rounded-xl border-4 border-yellow-600 shadow-2xl mb-8 flex flex-wrap justify-center gap-x-4 gap-y-2">
+                       {gameData.puzzle.phrase.split(" ").map((word, wIdx) => {
+                         const wordElement = (
+                             <div key={wIdx} className="flex flex-nowrap gap-1">
+                                 {word.split("").map((char, cIdx) => {
+                                     const idx = globalIndex + cIdx;
+                                     return (
+                                         <LetterTile 
+                                             key={idx}
+                                             letter={char}
+                                             revealed={gameData.revealedIndices.includes(idx) || gameState === 'final_win'}
+                                             isSpace={false}
+                                             isPunctuation={!/[A-Z]/.test(char)}
+                                         />
+                                     );
+                                 })}
+                             </div>
+                         );
+                         globalIndex += word.length + 1; 
+                         return wordElement;
+                     })}
+                  </div>
+              );
+          }
+
+          if (loading) return <div className="flex h-screen items-center justify-center bg-black text-white">Caricamento Studio...</div>;
+
+          if (!gameState || gameState === 'lobby') {
+             return (
+                <div className={`${bgStyle} flex items-center justify-center p-4`}>
+                    <div className="bg-blue-900/80 p-8 rounded-2xl border-4 border-yellow-500 max-w-lg w-full text-center shadow-2xl">
+                        <h1 className="text-5xl font-black text-yellow-400 mb-2 drop-shadow-md">LA RUOTA</h1>
+                        <p className="text-blue-200 mb-6 font-bold uppercase tracking-widest">Edizione Italiana</p>
+                        {!roomCode ? (
+                            <div className="space-y-4">
+                                {error && (
+                                    <div className="bg-red-500/20 border border-red-500 text-red-200 p-2 rounded text-sm animate-pulse font-bold">
+                                        {error}
+                                    </div>
+                                )}
+                                <input 
+                                    className="w-full p-3 bg-blue-950 border border-blue-500 rounded text-center text-white text-xl font-bold" 
+                                    placeholder="IL TUO NOME" 
+                                    value={playerName} 
+                                    onChange={e=>{setPlayerName(e.target.value.toUpperCase()); setError('');}} 
+                                />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Button onClick={() => createLobby(false)} variant="gold">CREA PARTITA</Button>
+                                    <div className="flex gap-2">
+                                        <input className="w-full p-2 bg-blue-950 border border-blue-500 rounded text-center uppercase" placeholder="CODICE" onChange={e=>setRoomCode(e.target.value.toUpperCase())} />
+                                        <Button onClick={joinLobby}>ENTRA</Button>
+                                    </div>
+                                </div>
+                                {/* AI Button */}
+                                <div className="pt-2 border-t border-blue-700">
+                                     <Button onClick={() => createLobby(true)} variant="ai" className="w-full" disabled={aiLoading}>
+                                         {aiLoading ? <Sparkles className="animate-spin mr-2"/> : <Sparkles className="mr-2"/>} 
+                                         {aiLoading ? "Creazione in corso..." : "NUOVA PARTITA CON AI"}
+                                     </Button>
+                                     <p className="text-xs text-blue-300 mt-1">Genera un puzzle infinito con Gemini</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <div className="text-6xl font-mono font-bold text-white mb-4 tracking-widest">{roomCode}</div>
+                                <div className="bg-black/40 rounded p-4 mb-4">
+                                    <h3 className="text-yellow-400 font-bold mb-2">CONCORRENTI</h3>
+                                    {gameData?.players.map((p,i) => (
+                                        <div key={i} className="flex justify-between py-1 border-b border-gray-700">
+                                            <span>{p.name}</span>
+                                            {p.uid===gameData.hostId && <span className="text-xs bg-yellow-500 text-black px-1 rounded">REGIA</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                                {isHost && <Button onClick={async ()=>{
+                                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'playing' });
+                                }} variant="success" className="w-full py-3 text-xl">SIGLA!</Button>}
+                                {!isHost && <p className="animate-pulse text-blue-300">In attesa della regia...</p>}
                             </div>
                         )}
-                        <input 
-                            className="w-full p-3 bg-blue-950 border border-blue-500 rounded text-center text-white text-xl font-bold" 
-                            placeholder="IL TUO NOME" 
-                            value={playerName} 
-                            onChange={e=>{setPlayerName(e.target.value.toUpperCase()); setError('');}} 
-                        />
-                        <div className="grid grid-cols-2 gap-4">
-                            <Button onClick={() => createLobby(false)} variant="gold">CREA PARTITA</Button>
-                            <div className="flex gap-2">
-                                <input className="w-full p-2 bg-blue-950 border border-blue-500 rounded text-center uppercase" placeholder="CODICE" onChange={e=>setRoomCode(e.target.value.toUpperCase())} />
-                                <Button onClick={joinLobby}>ENTRA</Button>
+                    </div>
+                </div>
+             );
+          }
+
+          if (gameState === 'playing') {
+              return (
+                <div className={`${bgStyle} flex flex-col h-screen`}>
+                    {/* Modal Risolvi INTERATTIVO */}
+                    {isSolving && (
+                        <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
+                            <div className="w-full max-w-5xl text-center">
+                                <h2 className="text-3xl font-black text-yellow-400 mb-6 drop-shadow-[0_0_10px_rgba(255,215,0,0.8)] uppercase">
+                                    SOLUZIONE
+                                </h2>
+                                
+                                {/* Tabellone Interattivo */}
+                                <div className="mb-8 transform scale-110 md:scale-125">
+                                    {renderPuzzle('solve')}
+                                </div>
+
+                                {/* Input Nascosto per catturare la tastiera */}
+                                <input 
+                                    ref={solveInputRef}
+                                    className="absolute opacity-0 top-0 left-0 w-full h-full cursor-default"
+                                    autoFocus
+                                    value={solveBuffer}
+                                    onChange={handleSolveInput}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') submitSolve();
+                                        if (e.key === 'Escape') { setIsSolving(false); setSolveBuffer(""); }
+                                    }}
+                                    autoComplete="off"
+                                />
+
+                                <div className="flex gap-4 justify-center relative z-20">
+                                    <Button onClick={() => { setIsSolving(false); setSolveBuffer(""); }} variant="secondary" className="px-8 py-4 text-xl">
+                                        ANNULLA
+                                    </Button>
+                                    <Button onClick={submitSolve} variant="success" className="px-8 py-4 text-xl">
+                                        CONFERMA
+                                    </Button>
+                                </div>
+                                <p className="mt-4 text-gray-400 animate-pulse flex items-center justify-center gap-2">
+                                    <Keyboard size={20}/> Scrivi le lettere mancanti...
+                                </p>
                             </div>
                         </div>
-                        {/* AI Button */}
-                        <div className="pt-2 border-t border-blue-700">
-                             <Button onClick={() => createLobby(true)} variant="ai" className="w-full" disabled={aiLoading}>
-                                 {aiLoading ? <Sparkles className="animate-spin mr-2"/> : <Sparkles className="mr-2"/>} 
-                                 {aiLoading ? "Creazione in corso..." : "NUOVA PARTITA CON AI"}
-                             </Button>
-                             <p className="text-xs text-blue-300 mt-1">Genera un puzzle infinito con Gemini</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div>
-                        <div className="text-6xl font-mono font-bold text-white mb-4 tracking-widest">{roomCode}</div>
-                        <div className="bg-black/40 rounded p-4 mb-4">
-                            <h3 className="text-yellow-400 font-bold mb-2">CONCORRENTI</h3>
-                            {gameData?.players.map((p,i) => (
-                                <div key={i} className="flex justify-between py-1 border-b border-gray-700">
-                                    <span>{p.name}</span>
-                                    {p.uid===gameData.hostId && <span className="text-xs bg-yellow-500 text-black px-1 rounded">REGIA</span>}
-                                </div>
-                            ))}
-                        </div>
-                        {isHost && <Button onClick={async ()=>{
-                             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'playing' });
-                        }} variant="success" className="w-full py-3 text-xl">SIGLA!</Button>}
-                        {!isHost && <p className="animate-pulse text-blue-300">In attesa della regia...</p>}
-                    </div>
-                )}
-            </div>
-        </div>
-     );
-  }
+                    )}
 
-  if (gameState === 'playing') {
-      return (
-        <div className={`${bgStyle} flex flex-col h-screen`}>
-            {/* Modal Risolvi INTERATTIVO */}
-            {isSolving && (
-                <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
-                    <div className="w-full max-w-5xl text-center">
-                        <h2 className="text-3xl font-black text-yellow-400 mb-6 drop-shadow-[0_0_10px_rgba(255,215,0,0.8)] uppercase">
-                            SOLUZIONE
-                        </h2>
+                    {/* TOP BAR */}
+                    <div className="bg-gradient-to-b from-blue-800 to-blue-900 border-b-4 border-yellow-500 p-2 flex justify-between items-center shadow-lg shrink-0 z-50 relative">
+                        <div className="flex items-center gap-2 w-16 md:w-auto">
+                            <div className="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center font-bold text-black border-2 border-white shadow-inner">
+                                {gameData.round}
+                            </div>
+                            <span className="hidden md:inline font-bold text-yellow-100 uppercase tracking-widest text-sm">Round</span>
+                        </div>
                         
-                        {/* Tabellone Interattivo */}
-                        <div className="mb-8 transform scale-110 md:scale-125">
-                            {renderPuzzle('solve')}
+                        {/* CENTER: LAST ACTION (RESTORED) */}
+                        <div className="flex-1 px-2 flex flex-col items-center justify-center">
+                             <div className="bg-black/60 px-4 py-1 md:px-6 md:py-2 rounded-full border border-blue-400 text-white font-bold text-center text-sm md:text-xl shadow-[0_0_10px_rgba(0,191,255,0.5)] truncate w-full max-w-2xl">
+                                {gameData.lastAction}
+                            </div>
                         </div>
 
-                        {/* Input Nascosto per catturare la tastiera */}
-                        <input 
-                            ref={solveInputRef}
-                            className="absolute opacity-0 top-0 left-0 w-full h-full cursor-default"
-                            autoFocus
-                            value={solveBuffer}
-                            onChange={handleSolveInput}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') submitSolve();
-                                if (e.key === 'Escape') { setIsSolving(false); setSolveBuffer(""); }
-                            }}
-                            autoComplete="off"
-                        />
-
-                        <div className="flex gap-4 justify-center relative z-20">
-                            <Button onClick={() => { setIsSolving(false); setSolveBuffer(""); }} variant="secondary" className="px-8 py-4 text-xl">
-                                ANNULLA
-                            </Button>
-                            <Button onClick={submitSolve} variant="success" className="px-8 py-4 text-xl">
-                                CONFERMA
-                            </Button>
-                        </div>
-                        <p className="mt-4 text-gray-400 animate-pulse flex items-center justify-center gap-2">
-                            <Keyboard size={20}/> Scrivi le lettere mancanti...
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {/* TOP BAR */}
-            <div className="bg-gradient-to-b from-blue-800 to-blue-900 border-b-4 border-yellow-500 p-2 flex justify-between items-center shadow-lg shrink-0 z-50 relative">
-                <div className="flex items-center gap-2 w-16 md:w-auto">
-                    <div className="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center font-bold text-black border-2 border-white shadow-inner">
-                        {gameData.round}
-                    </div>
-                    <span className="hidden md:inline font-bold text-yellow-100 uppercase tracking-widest text-sm">Round</span>
-                </div>
-                
-                {/* CENTER: LAST ACTION (RESTORED) */}
-                <div className="flex-1 px-2 flex flex-col items-center justify-center">
-                     <div className="bg-black/60 px-4 py-1 md:px-6 md:py-2 rounded-full border border-blue-400 text-white font-bold text-center text-sm md:text-xl shadow-[0_0_10px_rgba(0,191,255,0.5)] truncate w-full max-w-2xl">
-                        {gameData.lastAction}
-                    </div>
-                </div>
-
-                {/* RIGHT: HOST CONTROLS & COMMENT */}
-                <div className="flex items-center justify-end w-16 md:w-auto relative">
-                     {/* Host Bubble */}
-                     {gameData.hostComment && (
-                        <div className="absolute top-12 right-0 md:right-12 w-48 md:w-64 bg-white text-black p-2 rounded-xl text-xs md:text-sm font-bold shadow-2xl border-2 border-purple-500 z-50 animate-in fade-in slide-in-from-top-2 pointer-events-none">
-                            <span className="italic">"{gameData.hostComment}"</span>
-                            <div className="absolute -top-2 right-4 w-4 h-4 bg-white border-t-2 border-l-2 border-purple-500 rotate-45"></div>
-                        </div>
-                     )}
-
-                     {isHost && (
-                        <button 
-                            onClick={triggerHostCommentary}
-                            disabled={aiLoading}
-                            className="ml-2 p-2 bg-purple-600 rounded-full hover:bg-purple-500 transition-colors shadow-lg border border-purple-300"
-                            title="Genera commento AI"
-                        >
-                            {aiLoading ? <Sparkles size={20} className="animate-spin text-white"/> : <Bot size={20} className="text-white"/>}
-                        </button>
-                     )}
-                </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center py-4">
-                
-                {/* CATEGORIA */}
-                <div className="bg-blue-600 text-white px-6 py-2 rounded-lg font-black border-2 border-white shadow-[0_0_15px_rgba(255,255,255,0.5)] uppercase tracking-[0.2em] mb-6 text-sm md:text-xl transform -skew-x-12">
-                    {gameData.puzzle.category}
-                </div>
-
-                {/* TABELLONE WORD-WRAP FIX */}
-                {renderPuzzle('normal')}
-
-                {/* AREA DI GIOCO */}
-                <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8 px-4 items-center">
-                    
-                    {/* SINISTRA: PODI CONCORRENTI */}
-                    <div className="flex flex-col gap-3 order-2 lg:order-1">
-                        {gameData.players.map((p, i) => {
-                            const isTurn = i === gameData.currentTurnIndex;
-                            return (
-                                <div key={i} className={`relative overflow-hidden rounded-r-xl border-l-8 transition-all duration-300 ${isTurn ? 'bg-gradient-to-r from-blue-800 to-blue-600 border-yellow-400 scale-105 shadow-[0_0_20px_rgba(255,215,0,0.4)]' : 'bg-gray-900/60 border-gray-600 opacity-70'}`}>
-                                    <div className="p-3 flex justify-between items-center">
-                                        <div>
-                                            <div className="font-bold text-white text-lg flex items-center gap-2">
-                                                {p.name}
-                                                {p.jolly > 0 && <span className="bg-purple-600 text-xs px-2 rounded-full border border-purple-300 flex items-center gap-1"><ShieldCheck size={12}/> JOLLY x{p.jolly}</span>}
-                                            </div>
-                                            <div className="text-green-400 font-mono text-2xl drop-shadow-md">€ {p.score}</div>
-                                        </div>
-                                        {p.totalScore > 0 && <div className="text-right text-xs text-blue-300 bg-blue-900/50 p-1 rounded">TOTALE<br/>€ {p.totalScore}</div>}
-                                    </div>
-                                    {isTurn && <div className="absolute top-0 right-0 h-full w-2 bg-yellow-400 animate-pulse"/>}
+                        {/* RIGHT: HOST CONTROLS & COMMENT */}
+                        <div className="flex items-center justify-end w-16 md:w-auto relative">
+                             {/* Host Bubble */}
+                             {gameData.hostComment && (
+                                <div className="absolute top-12 right-0 md:right-12 w-48 md:w-64 bg-white text-black p-2 rounded-xl text-xs md:text-sm font-bold shadow-2xl border-2 border-purple-500 z-50 animate-in fade-in slide-in-from-top-2 pointer-events-none">
+                                    <span className="italic">"{gameData.hostComment}"</span>
+                                    <div className="absolute -top-2 right-4 w-4 h-4 bg-white border-t-2 border-l-2 border-purple-500 rotate-45"></div>
                                 </div>
-                            )
-                        })}
+                             )}
+
+                             {isHost && (
+                                <button 
+                                    onClick={triggerHostCommentary}
+                                    disabled={aiLoading}
+                                    className="ml-2 p-2 bg-purple-600 rounded-full hover:bg-purple-500 transition-colors shadow-lg border border-purple-300"
+                                    title="Genera commento AI"
+                                >
+                                    {aiLoading ? <Sparkles size={20} className="animate-spin text-white"/> : <Bot size={20} className="text-white"/>}
+                                </button>
+                             )}
+                        </div>
                     </div>
 
-                    {/* CENTRO: RUOTA (LAYOUT FIX) */}
-                    <div className="flex flex-col items-center order-1 lg:order-2">
-                         <Wheel rotation={gameData.wheelRotation} spinning={gameData.wheelSpinning} onSpinEnd={handleSpinEnd} />
-                         
-                         {/* PANNELLO COMANDI */}
-                         <div className="mt-6 w-full max-w-md min-h-[160px] flex items-center justify-center">
-                            {!isMyTurn ? (
-                                <div className="text-xl text-blue-300 font-light animate-pulse">Tocca a {gameData.players[gameData.currentTurnIndex].name}...</div>
-                            ) : (
-                                <div className="bg-blue-900/50 backdrop-blur-md p-4 rounded-xl border border-blue-400/50 w-full shadow-xl">
-                                    {(gameData.phase === 'spin' || gameData.phase === 'action') && !gameData.wheelSpinning && (
-                                        <div className="space-y-3">
-                                            <Button onClick={spinWheel} disabled={gameData.wheelSpinning} variant="gold" className="w-full py-6 text-2xl shadow-yellow-500/20">
-                                                <RotateCw size={32} className={gameData.wheelSpinning ? "animate-spin" : ""} /> {gameData.phase === 'action' ? 'GIRA ANCORA' : 'GIRA'}
-                                            </Button>
-                                            {gameData.phase === 'action' && (
-                                                <Button onClick={openSolveMode} variant="success" className="w-full py-3">
-                                                    <CheckCircle size={18}/> VOGLIO RISOLVERE
-                                                </Button>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center py-4">
+                        
+                        {/* CATEGORIA */}
+                        <div className="bg-blue-600 text-white px-6 py-2 rounded-lg font-black border-2 border-white shadow-[0_0_15px_rgba(255,255,255,0.5)] uppercase tracking-[0.2em] mb-6 text-sm md:text-xl transform -skew-x-12">
+                            {gameData.puzzle.category}
+                        </div>
+
+                        {/* TABELLONE WORD-WRAP FIX */}
+                        {renderPuzzle('normal')}
+
+                        {/* AREA DI GIOCO */}
+                        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8 px-4 items-center">
+                            
+                            {/* SINISTRA: PODI CONCORRENTI */}
+                            <div className="flex flex-col gap-3 order-2 lg:order-1">
+                                {gameData.players.map((p, i) => {
+                                    const isTurn = i === gameData.currentTurnIndex;
+                                    return (
+                                        <div key={i} className={`relative overflow-hidden rounded-r-xl border-l-8 transition-all duration-300 ${isTurn ? 'bg-gradient-to-r from-blue-800 to-blue-600 border-yellow-400 scale-105 shadow-[0_0_20px_rgba(255,215,0,0.4)]' : 'bg-gray-900/60 border-gray-600 opacity-70'}`}>
+                                            <div className="p-3 flex justify-between items-center">
+                                                <div>
+                                                    <div className="font-bold text-white text-lg flex items-center gap-2">
+                                                        {p.name}
+                                                        {p.jolly > 0 && <span className="bg-purple-600 text-xs px-2 rounded-full border border-purple-300 flex items-center gap-1"><ShieldCheck size={12}/> JOLLY x{p.jolly}</span>}
+                                                    </div>
+                                                    <div className="text-green-400 font-mono text-2xl drop-shadow-md">€ {p.score}</div>
+                                                </div>
+                                                {p.totalScore > 0 && <div className="text-right text-xs text-blue-300 bg-blue-900/50 p-1 rounded">TOTALE<br/>€ {p.totalScore}</div>}
+                                            </div>
+                                            {isTurn && <div className="absolute top-0 right-0 h-full w-2 bg-yellow-400 animate-pulse"/>}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+
+                            {/* CENTRO: RUOTA (LAYOUT FIX) */}
+                            <div className="flex flex-col items-center order-1 lg:order-2">
+                                 <Wheel rotation={gameData.wheelRotation} spinning={gameData.wheelSpinning} onSpinEnd={handleSpinEnd} />
+                                 
+                                 {/* PANNELLO COMANDI */}
+                                 <div className="mt-6 w-full max-w-md min-h-[160px] flex items-center justify-center">
+                                    {!isMyTurn ? (
+                                        <div className="text-xl text-blue-300 font-light animate-pulse">Tocca a {gameData.players[gameData.currentTurnIndex].name}...</div>
+                                    ) : (
+                                        <div className="bg-blue-900/50 backdrop-blur-md p-4 rounded-xl border border-blue-400/50 w-full shadow-xl">
+                                            {(gameData.phase === 'spin' || gameData.phase === 'action') && !gameData.wheelSpinning && (
+                                                <div className="space-y-3">
+                                                    <Button onClick={spinWheel} disabled={gameData.wheelSpinning} variant="gold" className="w-full py-6 text-2xl shadow-yellow-500/20">
+                                                        <RotateCw size={32} className={gameData.wheelSpinning ? "animate-spin" : ""} /> {gameData.phase === 'action' ? 'GIRA ANCORA' : 'GIRA'}
+                                                    </Button>
+                                                    {gameData.phase === 'action' && (
+                                                        <Button onClick={openSolveMode} variant="success" className="w-full py-3">
+                                                            <CheckCircle size={18}/> VOGLIO RISOLVERE
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            )}
+                                            
+                                            {gameData.phase === 'guess' && (
+                                                <div className="animate-in slide-in-from-bottom duration-300">
+                                                    <p className="text-center text-yellow-300 text-sm mb-2 font-bold uppercase">Scegli una consonante</p>
+                                                    <div className="flex flex-wrap justify-center gap-1">
+                                                        {consonants.map(c => (
+                                                            <button key={c} disabled={gameData.guessedLetters.includes(c)} onClick={()=>guessConsonant(c)} className="w-9 h-9 bg-gradient-to-b from-blue-600 to-blue-800 border border-blue-400 rounded text-white font-bold hover:scale-110 disabled:opacity-30 disabled:scale-100 transition-all">
+                                                                {c}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {gameData.phase === 'action' && !gameData.wheelSpinning && (
+                                                <div className="mt-4 border-t border-blue-700 pt-2">
+                                                    <div className="flex justify-between text-xs text-blue-300 mb-1 px-2"><span>COMPRA VOCALE</span><span>COSTO: €{VOWEL_COST}</span></div>
+                                                    <div className="flex justify-center gap-2">
+                                                        {vowels.map(v => (
+                                                            <button key={v} disabled={gameData.guessedLetters.includes(v) || gameData.players[gameData.currentTurnIndex].score < VOWEL_COST} onClick={()=>buyVowel(v)} className="w-10 h-10 bg-pink-600 border border-pink-400 rounded-full text-white font-bold hover:bg-pink-500 disabled:opacity-30 transition-all">
+                                                                {v}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
                                     )}
-                                    
-                                    {gameData.phase === 'guess' && (
-                                        <div className="animate-in slide-in-from-bottom duration-300">
-                                            <p className="text-center text-yellow-300 text-sm mb-2 font-bold uppercase">Scegli una consonante</p>
-                                            <div className="flex flex-wrap justify-center gap-1">
-                                                {consonants.map(c => (
-                                                    <button key={c} disabled={gameData.guessedLetters.includes(c)} onClick={()=>guessConsonant(c)} className="w-9 h-9 bg-gradient-to-b from-blue-600 to-blue-800 border border-blue-400 rounded text-white font-bold hover:scale-110 disabled:opacity-30 disabled:scale-100 transition-all">
-                                                        {c}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                                 </div>
+                            </div>
 
-                                    {gameData.phase === 'action' && !gameData.wheelSpinning && (
-                                        <div className="mt-4 border-t border-blue-700 pt-2">
-                                            <div className="flex justify-between text-xs text-blue-300 mb-1 px-2"><span>COMPRA VOCALE</span><span>COSTO: €{VOWEL_COST}</span></div>
-                                            <div className="flex justify-center gap-2">
-                                                {vowels.map(v => (
-                                                    <button key={v} disabled={gameData.guessedLetters.includes(v) || gameData.players[gameData.currentTurnIndex].score < VOWEL_COST} onClick={()=>buyVowel(v)} className="w-10 h-10 bg-pink-600 border border-pink-400 rounded-full text-white font-bold hover:bg-pink-500 disabled:opacity-30 transition-all">
-                                                        {v}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                         </div>
-                    </div>
-
-                    {/* DESTRA: CHIAMATE */}
-                    <div className="hidden lg:block h-64 bg-black/30 rounded-xl border border-blue-800 p-4 overflow-y-auto order-3">
-                         <h4 className="text-blue-400 font-bold border-b border-blue-800 pb-2 mb-2 text-sm uppercase">Lettere Usate</h4>
-                         <div className="flex flex-wrap gap-2">
-                             {gameData.guessedLetters.map((l,i)=>(
-                                 <span key={i} className={`w-8 h-8 flex items-center justify-center rounded font-bold ${vowels.includes(l)?'bg-pink-900 text-pink-300':'bg-blue-900 text-blue-300'}`}>{l}</span>
-                             ))}
-                         </div>
+                            {/* DESTRA: CHIAMATE */}
+                            <div className="hidden lg:block h-64 bg-black/30 rounded-xl border border-blue-800 p-4 overflow-y-auto order-3">
+                                 <h4 className="text-blue-400 font-bold border-b border-blue-800 pb-2 mb-2 text-sm uppercase">Lettere Usate</h4>
+                                 <div className="flex flex-wrap gap-2">
+                                     {gameData.guessedLetters.map((l,i)=>(
+                                         <span key={i} className={`w-8 h-8 flex items-center justify-center rounded font-bold ${vowels.includes(l)?'bg-pink-900 text-pink-300':'bg-blue-900 text-blue-300'}`}>{l}</span>
+                                     ))}
+                                 </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-      );
-  }
+              );
+          }
 
-  // --- ROUND FINALE ---
-  if (gameState && gameState.startsWith('final')) {
-      return (
-          <div className="min-h-screen bg-black flex flex-col items-center justify-center relative overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900 via-black to-black opacity-50 z-0"/>
-              
-              <div className="z-10 w-full max-w-5xl p-4 flex flex-col items-center">
-                  
-                  <div className="flex flex-col items-center mb-8">
-                      <Trophy size={64} className="text-yellow-400 animate-bounce mb-2"/>
-                      <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-500 to-yellow-200 uppercase drop-shadow-[0_0_10px_rgba(255,215,0,0.8)]">
-                          {gameState === 'final_win' ? "VITTORIA!" : "LA SFIDA FINALE"}
-                      </h1>
-                      <div className="text-2xl text-white mt-2 font-light">Campione: <strong className="text-yellow-300">{gameData.players.find(p=>p.uid===gameData.winnerId)?.name}</strong></div>
-                  </div>
-
-                  {/* TABELLONE WORD WRAP FINALE */}
-                  {renderFinalPuzzle()}
-                  
-                  {gameState === 'final_lobby' && isChampion && (
-                      <div className="bg-blue-900/80 p-6 rounded-lg border border-blue-500 text-center animate-in zoom-in">
-                          <h3 className="text-2xl font-bold mb-4">Sei pronto per la categoria: {gameData.puzzle.category}?</h3>
-                          <Button onClick={startFinalRound} variant="gold" className="text-xl px-8 py-4 w-full">SVELA R-S-T-L-N-E</Button>
-                      </div>
-                  )}
-
-                  {gameState === 'final_selection' && isChampion && (
-                      <div className="bg-blue-900/80 p-6 rounded-lg border border-blue-500 w-full max-w-2xl">
-                          <h3 className="text-xl text-yellow-300 mb-4 text-center">SCEGLI 3 CONSONANTI E 1 VOCALE</h3>
+          // --- ROUND FINALE ---
+          if (gameState && gameState.startsWith('final')) {
+              return (
+                  <div className="min-h-screen bg-black flex flex-col items-center justify-center relative overflow-hidden">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900 via-black to-black opacity-50 z-0"/>
+                      
+                      <div className="z-10 w-full max-w-5xl p-4 flex flex-col items-center">
                           
-                          <div className="mb-4">
-                              <p className="text-sm text-blue-300 mb-2">Consonanti ({3 - finalConsonants.length} rimanenti):</p>
-                              <div className="flex flex-wrap gap-1 justify-center">
-                                  {consonants.filter(c => !['R','S','T','L','N'].includes(c)).map(c => (
-                                      <button key={c} 
-                                          disabled={finalConsonants.includes(c) || finalConsonants.length >= 3} 
-                                          onClick={()=>{
-                                              playSound('click');
-                                              if(!finalConsonants.includes(c) && finalConsonants.length < 3) setFinalConsonants([...finalConsonants, c]);
-                                          }} 
-                                          className={`w-8 h-8 rounded font-bold ${finalConsonants.includes(c) ? 'bg-yellow-500 text-black' : 'bg-blue-700 text-white'}`}
-                                      >{c}</button>
-                                  ))}
-                              </div>
+                          <div className="flex flex-col items-center mb-8">
+                              <Trophy size={64} className="text-yellow-400 animate-bounce mb-2"/>
+                              <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-500 to-yellow-200 uppercase drop-shadow-[0_0_10px_rgba(255,215,0,0.8)]">
+                                  {gameState === 'final_win' ? "VITTORIA!" : "LA SFIDA FINALE"}
+                              </h1>
+                              <div className="text-2xl text-white mt-2 font-light">Campione: <strong className="text-yellow-300">{gameData.players.find(p=>p.uid===gameData.winnerId)?.name}</strong></div>
                           </div>
 
-                          <div className="mb-6">
-                              <p className="text-sm text-pink-300 mb-2">Vocale ({finalVowel ? 0 : 1} rimanenti):</p>
-                              <div className="flex gap-2 justify-center">
-                                  {vowels.filter(v => !['E'].includes(v)).map(v => (
-                                      <button key={v}
-                                          disabled={finalVowel}
-                                          onClick={()=>{ playSound('click'); setFinalVowel(v); }}
-                                          className={`w-10 h-10 rounded-full font-bold ${finalVowel===v ? 'bg-pink-500 text-white scale-110' : 'bg-pink-900 text-pink-200'}`}
-                                      >{v}</button>
-                                  ))}
+                          {/* TABELLONE WORD WRAP FINALE */}
+                          {renderFinalPuzzle()}
+                          
+                          {gameState === 'final_lobby' && isChampion && (
+                              <div className="bg-blue-900/80 p-6 rounded-lg border border-blue-500 text-center animate-in zoom-in">
+                                  <h3 className="text-2xl font-bold mb-4">Sei pronto per la categoria: {gameData.puzzle.category}?</h3>
+                                  <Button onClick={startFinalRound} variant="gold" className="text-xl px-8 py-4 w-full">SVELA R-S-T-L-N-E</Button>
                               </div>
-                          </div>
+                          )}
 
-                          <Button 
-                            disabled={finalConsonants.length < 3 || !finalVowel} 
-                            onClick={confirmFinalSelection} 
-                            variant="success" 
-                            className="w-full text-xl py-3"
-                          >
-                            CONFERMA SCELTA
-                          </Button>
-                      </div>
-                  )}
+                          {gameState === 'final_selection' && isChampion && (
+                              <div className="bg-blue-900/80 p-6 rounded-lg border border-blue-500 w-full max-w-2xl">
+                                  <h3 className="text-xl text-yellow-300 mb-4 text-center">SCEGLI 3 CONSONANTI E 1 VOCALE</h3>
+                                  
+                                  <div className="mb-4">
+                                      <p className="text-sm text-blue-300 mb-2">Consonanti ({3 - finalConsonants.length} rimanenti):</p>
+                                      <div className="flex flex-wrap gap-1 justify-center">
+                                          {consonants.filter(c => !['R','S','T','L','N'].includes(c)).map(c => (
+                                              <button key={c} 
+                                                  disabled={finalConsonants.includes(c) || finalConsonants.length >= 3} 
+                                                  onClick={()=>{
+                                                      playSound('click');
+                                                      if(!finalConsonants.includes(c) && finalConsonants.length < 3) setFinalConsonants([...finalConsonants, c]);
+                                                  }} 
+                                                  className={`w-8 h-8 rounded font-bold ${finalConsonants.includes(c) ? 'bg-yellow-500 text-black' : 'bg-blue-700 text-white'}`}
+                                              >{c}</button>
+                                          ))}
+                                      </div>
+                                  </div>
 
-                  {gameState === 'final_guess' && (
-                      <div className="w-full max-w-xl text-center">
-                          <div className="mb-6 flex justify-center items-center gap-4">
-                              <Timer size={40} className={finalTimer < 10 ? "text-red-500 animate-pulse" : "text-white"} />
-                              <span className={`text-6xl font-mono font-bold ${finalTimer < 10 ? "text-red-500" : "text-white"}`}>{finalTimer}</span>
-                          </div>
+                                  <div className="mb-6">
+                                      <p className="text-sm text-pink-300 mb-2">Vocale ({finalVowel ? 0 : 1} rimanenti):</p>
+                                      <div className="flex gap-2 justify-center">
+                                          {vowels.filter(v => !['E'].includes(v)).map(v => (
+                                              <button key={v}
+                                                  disabled={finalVowel}
+                                                  onClick={()=>{ playSound('click'); setFinalVowel(v); }}
+                                                  className={`w-10 h-10 rounded-full font-bold ${finalVowel===v ? 'bg-pink-500 text-white scale-110' : 'bg-pink-900 text-pink-200'}`}
+                                              >{v}</button>
+                                          ))}
+                                      </div>
+                                  </div>
 
-                          {isChampion ? (
-                              <div className="flex flex-col gap-4">
-                                  <input 
-                                    autoFocus
-                                    className="w-full bg-white text-black text-3xl p-4 text-center font-bold rounded uppercase border-4 border-yellow-500" 
-                                    placeholder="SCRIVI SOLUZIONE..." 
-                                    value={finalGuess} 
-                                    onChange={e=>setFinalGuess(e.target.value.toUpperCase())}
-                                    onKeyDown={e => e.key === 'Enter' && submitFinalGuess()}
-                                  />
-                                  <Button onClick={submitFinalGuess} variant="gold" className="py-4 text-xl">CONFERMA SOLUZIONE</Button>
+                                  <Button 
+                                    disabled={finalConsonants.length < 3 || !finalVowel} 
+                                    onClick={confirmFinalSelection} 
+                                    variant="success" 
+                                    className="w-full text-xl py-3"
+                                  >
+                                    CONFERMA SCELTA
+                                  </Button>
                               </div>
-                          ) : (
-                              <div className="text-2xl text-white animate-pulse">Il Campione sta ragionando...</div>
+                          )}
+
+                          {gameState === 'final_guess' && (
+                              <div className="w-full max-w-xl text-center">
+                                  <div className="mb-6 flex justify-center items-center gap-4">
+                                      <Timer size={40} className={finalTimer < 10 ? "text-red-500 animate-pulse" : "text-white"} />
+                                      <span className={`text-6xl font-mono font-bold ${finalTimer < 10 ? "text-red-500" : "text-white"}`}>{finalTimer}</span>
+                                  </div>
+
+                                  {isChampion ? (
+                                      <div className="flex flex-col gap-4">
+                                          <input 
+                                            autoFocus
+                                            className="w-full bg-white text-black text-3xl p-4 text-center font-bold rounded uppercase border-4 border-yellow-500" 
+                                            placeholder="SCRIVI SOLUZIONE..." 
+                                            value={finalGuess} 
+                                            onChange={e=>setFinalGuess(e.target.value.toUpperCase())}
+                                            onKeyDown={e => e.key === 'Enter' && submitFinalGuess()}
+                                          />
+                                          <Button onClick={submitFinalGuess} variant="gold" className="py-4 text-xl">CONFERMA SOLUZIONE</Button>
+                                      </div>
+                                  ) : (
+                                      <div className="text-2xl text-white animate-pulse">Il Campione sta ragionando...</div>
+                                  )}
+                              </div>
+                          )}
+                          
+                          {gameState === 'final_win' && (
+                              <div className="text-center animate-in zoom-in duration-500 mt-8">
+                                  <div className="text-3xl text-green-400 font-bold mb-4">RISPOSTA ESATTA!</div>
+                                  <div className="bg-yellow-500 text-black font-black text-6xl p-6 rounded-xl shadow-[0_0_50px_rgba(255,215,0,0.8)] rotate-2 border-4 border-white">
+                                      € 100.000
+                                  </div>
+                                  <p className="mt-4 text-white uppercase tracking-widest">Premio Finale</p>
+                                  <Button onClick={()=>window.location.reload()} variant="primary" className="mt-8">TORNA ALLA LOBBY</Button>
+                              </div>
+                          )}
+
+                          {gameState === 'final_guess' && finalTimer === 0 && (
+                              <div className="text-center bg-red-900/90 p-8 rounded border border-red-500 mt-4">
+                                  <h2 className="text-4xl text-white font-bold mb-2">TEMPO SCADUTO!</h2>
+                                  <p className="text-xl mb-4">La soluzione era:</p>
+                                  <div className="bg-black text-white text-2xl px-4 py-2 font-mono rounded inline-block">{gameData.puzzle.phrase}</div>
+                                  <div className="mt-8">
+                                      <Button onClick={()=>window.location.reload()} variant="secondary">TORNA ALLA LOBBY</Button>
+                                  </div>
+                              </div>
+                          )}
+
+                          {gameState !== 'final_lobby' && (
+                              <div className="absolute bottom-4 left-4 bg-black/50 p-2 rounded text-xs text-gray-400">
+                                  Lettere: R S T L N E {gameData.guessedLetters.filter(l => !['R','S','T','L','N','E'].includes(l)).join(" ")}
+                              </div>
                           )}
                       </div>
-                  )}
-                  
-                  {gameState === 'final_win' && (
-                      <div className="text-center animate-in zoom-in duration-500 mt-8">
-                          <div className="text-3xl text-green-400 font-bold mb-4">RISPOSTA ESATTA!</div>
-                          <div className="bg-yellow-500 text-black font-black text-6xl p-6 rounded-xl shadow-[0_0_50px_rgba(255,215,0,0.8)] rotate-2 border-4 border-white">
-                              € 100.000
-                          </div>
-                          <p className="mt-4 text-white uppercase tracking-widest">Premio Finale</p>
-                          <Button onClick={()=>window.location.reload()} variant="primary" className="mt-8">TORNA ALLA LOBBY</Button>
-                      </div>
-                  )}
+                  </div>
+              );
+          }
 
-                  {gameState === 'final_guess' && finalTimer === 0 && (
-                      <div className="text-center bg-red-900/90 p-8 rounded border border-red-500 mt-4">
-                          <h2 className="text-4xl text-white font-bold mb-2">TEMPO SCADUTO!</h2>
-                          <p className="text-xl mb-4">La soluzione era:</p>
-                          <div className="bg-black text-white text-2xl px-4 py-2 font-mono rounded inline-block">{gameData.puzzle.phrase}</div>
-                          <div className="mt-8">
-                              <Button onClick={()=>window.location.reload()} variant="secondary">TORNA ALLA LOBBY</Button>
-                          </div>
-                      </div>
-                  )}
+          return null;
+        }
 
-                  {gameState !== 'final_lobby' && (
-                      <div className="absolute bottom-4 left-4 bg-black/50 p-2 rounded text-xs text-gray-400">
-                          Lettere: R S T L N E {gameData.guessedLetters.filter(l => !['R','S','T','L','N','E'].includes(l)).join(" ")}
-                      </div>
-                  )}
-              </div>
-          </div>
-      );
-  }
-
-  return null;
-}
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
