@@ -54,6 +54,7 @@
           getFirestore, 
           collection, 
           doc, 
+          getDoc, 
           setDoc, 
           onSnapshot, 
           updateDoc, 
@@ -63,7 +64,7 @@
         import { 
           Trophy, Users, Play, RotateCw, AlertTriangle, CheckCircle, XCircle,
           Sparkles, Music, Monitor, Timer, Coins, ShieldCheck, Gift, Volume2,
-          Keyboard, Mic, Bot, LogOut
+          Keyboard, Mic, Bot, LogOut, Loader2
         } from 'lucide-react';
 
         // --- GEMINI API SETUP ---
@@ -218,6 +219,15 @@
         };
 
         // --- CONFIGURAZIONE E UTILS ---
+        
+        // Colori per i giocatori
+        const PLAYER_THEMES = [
+          { name: 'Blu', bg: 'bg-blue-600', border: 'border-blue-400', from: 'from-blue-800', to: 'to-blue-600', shadow: 'shadow-blue-500/50' },
+          { name: 'Rosso', bg: 'bg-red-600', border: 'border-red-400', from: 'from-red-800', to: 'to-red-600', shadow: 'shadow-red-500/50' },
+          { name: 'Verde', bg: 'bg-emerald-600', border: 'border-emerald-400', from: 'from-emerald-800', to: 'to-emerald-600', shadow: 'shadow-emerald-500/50' },
+          { name: 'Viola', bg: 'bg-purple-600', border: 'border-purple-400', from: 'from-purple-800', to: 'to-purple-600', shadow: 'shadow-purple-500/50' },
+          { name: 'Arancio', bg: 'bg-orange-600', border: 'border-orange-400', from: 'from-orange-800', to: 'to-orange-600', shadow: 'shadow-orange-500/50' },
+        ];
 
         const DATABASE_FRASI = {
           "PROVERBIO": [
@@ -487,8 +497,9 @@
           const [user, setUser] = useState(null);
           const [loading, setLoading] = useState(true);
           const [aiLoading, setAiLoading] = useState(false);
+          const [joining, setJoining] = useState(false); // Nuovo stato per il caricamento join
           const [roomCode, setRoomCode] = useState('');
-          const [inputCode, setInputCode] = useState(''); // NEW: stato separato per l'input
+          const [inputCode, setInputCode] = useState(''); 
           const [playerName, setPlayerName] = useState('');
           const [gameState, setGameState] = useState(null);
           const [gameData, setGameData] = useState(null);
@@ -534,9 +545,7 @@
                   setGameState(data.status);
                   if(data.hostComment) setHostComment(data.hostComment);
                 } else {
-                  // Se la stanza non esiste, resettiamo il codice per permettere di riprovare
                   setError(`Stanza ${roomCode} non trovata.`);
-                  // NON resettiamo roomCode qui per evitare loop, ma l'utente vedrà l'errore e potrà uscire
                   setGameState(null);
                 }
               },
@@ -626,21 +635,29 @@
           const joinLobby = async () => {
             if (!playerName.trim() || !inputCode) return setError("Nome o codice mancanti!");
             setError('');
-            setRoomCode(inputCode); // Imposta roomCode SOLO quando si clicca Entra
+            setJoining(true); // Attiva stato caricamento
             
-            // L'aggiornamento effettivo dei giocatori avviene quando il listener snapshot si attiva
-            // e conferma che la stanza esiste. Qui proviamo ad aggiungere il giocatore.
             try {
                 const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', inputCode);
-                // Usiamo updateDoc solo se la stanza esiste (gestito da firestore rules o try/catch se non esiste)
-                // In questo caso, ottimisticamente proviamo ad unirci.
+                
+                // 1. Verifica se la stanza esiste
+                const snap = await getDoc(roomRef);
+                if (!snap.exists()) {
+                   throw new Error("Codice errato: stanza non trovata.");
+                }
+
+                // 2. Aggiungi il giocatore
                 await updateDoc(roomRef, {
                     players: arrayUnion({ uid: user.uid, name: playerName.trim(), score: 0, totalScore: 0, jolly: 0 })
                 });
+
+                // 3. SOLO ORA mostra la stanza
+                setRoomCode(inputCode);
             } catch (e) { 
-               // Se errore qui, probabilmente la stanza non esiste ancora o errore di rete.
-               // Il listener onSnapshot gestirà l'errore visuale.
-               console.log("Tentativo di join in attesa o fallito", e);
+               console.error("Join error", e);
+               setError(e.message || "Impossibile unirsi alla partita.");
+            } finally {
+               setJoining(false);
             }
           };
 
@@ -997,7 +1014,9 @@
                                             value={inputCode}
                                             onChange={e=>setInputCode(e.target.value.toUpperCase())} 
                                         />
-                                        <Button onClick={joinLobby}>ENTRA</Button>
+                                        <Button onClick={joinLobby} disabled={joining}>
+                                            {joining ? <Loader2 className="animate-spin" /> : "ENTRA"}
+                                        </Button>
                                     </div>
                                 </div>
                                 {/* AI Button */}
@@ -1023,15 +1042,18 @@
                                         <span>CONCORRENTI</span>
                                         <span className="text-xs text-gray-400">{gameData?.players?.length || 0} online</span>
                                     </h3>
-                                    {gameData?.players ? gameData.players.map((p,i) => (
-                                        <div key={i} className="flex justify-between py-2 border-b border-gray-700 items-center">
-                                            <span className="font-bold flex items-center gap-2">
-                                                {p.uid === user.uid && <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"/>}
-                                                {p.name}
-                                            </span>
-                                            {p.uid===gameData.hostId && <span className="text-xs bg-yellow-500 text-black px-2 py-0.5 rounded font-bold">REGIA</span>}
-                                        </div>
-                                    )) : (
+                                    {gameData?.players ? gameData.players.map((p,i) => {
+                                        const theme = PLAYER_THEMES[i % PLAYER_THEMES.length];
+                                        return (
+                                          <div key={i} className={`flex justify-between py-2 border-b border-gray-700 items-center ${p.uid === user.uid ? 'bg-white/10 -mx-2 px-2 rounded' : ''}`}>
+                                              <span className="font-bold flex items-center gap-2">
+                                                  <div className={`w-3 h-3 rounded-full ${theme.bg}`}></div>
+                                                  {p.name}
+                                              </span>
+                                              {p.uid===gameData.hostId && <span className="text-xs bg-yellow-500 text-black px-2 py-0.5 rounded font-bold">REGIA</span>}
+                                          </div>
+                                        );
+                                    }) : (
                                         <div className="text-gray-400 py-4 animate-pulse">In attesa di connessione...</div>
                                     )}
                                 </div>
@@ -1156,15 +1178,18 @@
                             <div className="flex flex-col gap-3 order-2 lg:order-1">
                                 {gameData.players.map((p, i) => {
                                     const isTurn = i === gameData.currentTurnIndex;
+                                    const theme = PLAYER_THEMES[i % PLAYER_THEMES.length];
+                                    
                                     return (
-                                        <div key={i} className={`relative overflow-hidden rounded-r-xl border-l-8 transition-all duration-300 ${isTurn ? 'bg-gradient-to-r from-blue-800 to-blue-600 border-yellow-400 scale-105 shadow-[0_0_20px_rgba(255,215,0,0.4)]' : 'bg-gray-900/60 border-gray-600 opacity-70'}`}>
+                                        <div key={i} className={`relative overflow-hidden rounded-r-xl border-l-8 transition-all duration-300 ${isTurn ? `bg-gradient-to-r ${theme.from} ${theme.to} ${theme.border} scale-105 ${theme.shadow}` : 'bg-gray-900/60 border-gray-600 opacity-70'} shadow-lg border-y border-r`}>
                                             <div className="p-3 flex justify-between items-center">
                                                 <div>
                                                     <div className="font-bold text-white text-lg flex items-center gap-2">
+                                                        <div className={`w-3 h-3 rounded-full ${theme.bg} border border-white shadow-sm`}></div>
                                                         {p.name}
-                                                        {p.jolly > 0 && <span className="bg-purple-600 text-xs px-2 rounded-full border border-purple-300 flex items-center gap-1"><ShieldCheck size={12}/> JOLLY x{p.jolly}</span>}
+                                                        {p.jolly > 0 && <span className="bg-purple-600 text-xs px-2 rounded-full border border-purple-300 flex items-center gap-1"><ShieldCheck size={12}/> x{p.jolly}</span>}
                                                     </div>
-                                                    <div className="text-green-400 font-mono text-2xl drop-shadow-md">€ {p.score}</div>
+                                                    <div className={`font-mono text-2xl drop-shadow-md ${isTurn ? 'text-white' : 'text-gray-400'}`}>€ {p.score}</div>
                                                 </div>
                                                 {p.totalScore > 0 && <div className="text-right text-xs text-blue-300 bg-blue-900/50 p-1 rounded">TOTALE<br/>€ {p.totalScore}</div>}
                                             </div>
@@ -1181,7 +1206,12 @@
                                  {/* PANNELLO COMANDI */}
                                  <div className="mt-6 w-full max-w-md min-h-[160px] flex items-center justify-center">
                                     {!isMyTurn ? (
-                                        <div className="text-xl text-blue-300 font-light animate-pulse">Tocca a {gameData.players[gameData.currentTurnIndex].name}...</div>
+                                        <div className="text-xl text-blue-300 font-light animate-pulse flex flex-col items-center gap-2">
+                                            <span>Tocca a...</span>
+                                            <span className={`font-bold text-2xl px-4 py-1 rounded bg-black/40 border border-blue-500/50 text-white`}>
+                                                {gameData.players[gameData.currentTurnIndex].name}
+                                            </span>
+                                        </div>
                                     ) : (
                                         <div className="bg-blue-900/50 backdrop-blur-md p-4 rounded-xl border border-blue-400/50 w-full shadow-xl">
                                             {(gameData.phase === 'spin' || gameData.phase === 'action') && !gameData.wheelSpinning && (
