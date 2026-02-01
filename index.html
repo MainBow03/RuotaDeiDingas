@@ -63,7 +63,7 @@
         import { 
           Trophy, Users, Play, RotateCw, AlertTriangle, CheckCircle, XCircle,
           Sparkles, Music, Monitor, Timer, Coins, ShieldCheck, Gift, Volume2,
-          Keyboard, Mic, Bot
+          Keyboard, Mic, Bot, LogOut
         } from 'lucide-react';
 
         // --- GEMINI API SETUP ---
@@ -488,6 +488,7 @@
           const [loading, setLoading] = useState(true);
           const [aiLoading, setAiLoading] = useState(false);
           const [roomCode, setRoomCode] = useState('');
+          const [inputCode, setInputCode] = useState(''); // NEW: stato separato per l'input
           const [playerName, setPlayerName] = useState('');
           const [gameState, setGameState] = useState(null);
           const [gameData, setGameData] = useState(null);
@@ -533,7 +534,9 @@
                   setGameState(data.status);
                   if(data.hostComment) setHostComment(data.hostComment);
                 } else {
-                  setError("Stanza non trovata.");
+                  // Se la stanza non esiste, resettiamo il codice per permettere di riprovare
+                  setError(`Stanza ${roomCode} non trovata.`);
+                  // NON resettiamo roomCode qui per evitare loop, ma l'utente vedrà l'errore e potrà uscire
                   setGameState(null);
                 }
               },
@@ -621,13 +624,24 @@
           };
 
           const joinLobby = async () => {
-            if (!playerName.trim() || !roomCode) return setError("Nome o codice mancanti!");
+            if (!playerName.trim() || !inputCode) return setError("Nome o codice mancanti!");
+            setError('');
+            setRoomCode(inputCode); // Imposta roomCode SOLO quando si clicca Entra
+            
+            // L'aggiornamento effettivo dei giocatori avviene quando il listener snapshot si attiva
+            // e conferma che la stanza esiste. Qui proviamo ad aggiungere il giocatore.
             try {
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode);
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', inputCode);
+                // Usiamo updateDoc solo se la stanza esiste (gestito da firestore rules o try/catch se non esiste)
+                // In questo caso, ottimisticamente proviamo ad unirci.
                 await updateDoc(roomRef, {
                     players: arrayUnion({ uid: user.uid, name: playerName.trim(), score: 0, totalScore: 0, jolly: 0 })
                 });
-            } catch (e) { setError("Errore di connessione o stanza inesistente."); }
+            } catch (e) { 
+               // Se errore qui, probabilmente la stanza non esiste ancora o errore di rete.
+               // Il listener onSnapshot gestirà l'errore visuale.
+               console.log("Tentativo di join in attesa o fallito", e);
+            }
           };
 
           const spinWheel = async () => {
@@ -977,7 +991,12 @@
                                 <div className="grid grid-cols-2 gap-4">
                                     <Button onClick={() => createLobby(false)} variant="gold">CREA PARTITA</Button>
                                     <div className="flex gap-2">
-                                        <input className="w-full p-2 bg-blue-950 border border-blue-500 rounded text-center uppercase" placeholder="CODICE" onChange={e=>setRoomCode(e.target.value.toUpperCase())} />
+                                        <input 
+                                            className="w-full p-2 bg-blue-950 border border-blue-500 rounded text-center uppercase" 
+                                            placeholder="CODICE" 
+                                            value={inputCode}
+                                            onChange={e=>setInputCode(e.target.value.toUpperCase())} 
+                                        />
                                         <Button onClick={joinLobby}>ENTRA</Button>
                                     </div>
                                 </div>
@@ -992,20 +1011,43 @@
                             </div>
                         ) : (
                             <div>
+                                {error && (
+                                    <div className="bg-red-500/20 border border-red-500 text-red-200 p-2 mb-4 rounded text-sm font-bold flex justify-between items-center">
+                                        <span>{error}</span>
+                                        <button onClick={()=>{setRoomCode(''); setInputCode(''); setError('');}} className="underline">ESCI</button>
+                                    </div>
+                                )}
                                 <div className="text-6xl font-mono font-bold text-white mb-4 tracking-widest">{roomCode}</div>
                                 <div className="bg-black/40 rounded p-4 mb-4">
-                                    <h3 className="text-yellow-400 font-bold mb-2">CONCORRENTI</h3>
-                                    {gameData?.players.map((p,i) => (
-                                        <div key={i} className="flex justify-between py-1 border-b border-gray-700">
-                                            <span>{p.name}</span>
-                                            {p.uid===gameData.hostId && <span className="text-xs bg-yellow-500 text-black px-1 rounded">REGIA</span>}
+                                    <h3 className="text-yellow-400 font-bold mb-2 flex justify-between">
+                                        <span>CONCORRENTI</span>
+                                        <span className="text-xs text-gray-400">{gameData?.players?.length || 0} online</span>
+                                    </h3>
+                                    {gameData?.players ? gameData.players.map((p,i) => (
+                                        <div key={i} className="flex justify-between py-2 border-b border-gray-700 items-center">
+                                            <span className="font-bold flex items-center gap-2">
+                                                {p.uid === user.uid && <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"/>}
+                                                {p.name}
+                                            </span>
+                                            {p.uid===gameData.hostId && <span className="text-xs bg-yellow-500 text-black px-2 py-0.5 rounded font-bold">REGIA</span>}
                                         </div>
-                                    ))}
+                                    )) : (
+                                        <div className="text-gray-400 py-4 animate-pulse">In attesa di connessione...</div>
+                                    )}
                                 </div>
-                                {isHost && <Button onClick={async ()=>{
-                                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'playing' });
-                                }} variant="success" className="w-full py-3 text-xl">SIGLA!</Button>}
-                                {!isHost && <p className="animate-pulse text-blue-300">In attesa della regia...</p>}
+                                {isHost ? (
+                                    <Button onClick={async ()=>{
+                                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'playing' });
+                                    }} variant="success" className="w-full py-3 text-xl">SIGLA!</Button>
+                                ) : (
+                                    <p className="animate-pulse text-blue-300 mb-4">In attesa della regia...</p>
+                                )}
+                                
+                                <div className="mt-4 border-t border-blue-900 pt-4">
+                                    <Button onClick={()=>{setRoomCode(''); setInputCode(''); setGameData(null);}} variant="secondary" className="w-full text-sm">
+                                        <LogOut size={16}/> ESCI DALLA STANZA
+                                    </Button>
+                                </div>
                             </div>
                         )}
                     </div>
