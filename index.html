@@ -63,7 +63,7 @@
         import { 
           Trophy, Users, Play, RotateCw, AlertTriangle, CheckCircle, XCircle,
           Sparkles, Music, Monitor, Timer, Coins, ShieldCheck, Gift, Volume2,
-          Keyboard, Mic, Bot, LogOut, Loader2, Info
+          Keyboard, Mic, Bot, LogOut, Loader2, Info, Medal
         } from 'lucide-react';
 
         // --- GEMINI API SETUP ---
@@ -903,14 +903,16 @@
                 const newPlayers = [...gameData.players];
                 newPlayers[gameData.currentTurnIndex].totalScore += newPlayers[gameData.currentTurnIndex].score;
                 
-                if (gameData.round >= 3) {
-                    const winner = newPlayers.reduce((p, c) => p.totalScore > c.totalScore ? p : c);
+                // MODIFICA: Round aumentati a 5 e aggiunta classifica finale
+                if (gameData.round >= 5) {
+                    const sortedPlayers = [...newPlayers].sort((a, b) => b.totalScore - a.totalScore);
+                    const winner = sortedPlayers[0];
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
-                        status: 'final_lobby',
+                        status: 'pre_final_leaderboard', // NUOVO STATO CLASSIFICA
                         winnerId: winner.uid,
                         players: newPlayers,
                         puzzle: getRandomPuzzle(),
-                        lastAction: `Il CAMPIONE è ${winner.name}!`
+                        lastAction: `FINE PARTITA! Vediamo la classifica...`
                     });
                 } else {
                     const nextRound = gameData.round + 1;
@@ -1351,6 +1353,62 @@
                         </div>
                     </div>
                 </div>
+              );
+          }
+
+          // --- SCHERMATA CLASSIFICA ---
+          if (gameState === 'pre_final_leaderboard') {
+              const sortedPlayers = [...gameData.players].sort((a, b) => b.totalScore - a.totalScore);
+              
+              return (
+                  <div className="min-h-screen bg-black flex flex-col items-center justify-center relative overflow-hidden">
+                       {/* Background effects */}
+                       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900 via-black to-black opacity-50 z-0"/>
+                       
+                       <div className="z-10 w-full max-w-4xl p-4 flex flex-col items-center animate-in slide-in-from-bottom duration-700">
+                           <h1 className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 mb-8 drop-shadow-2xl text-center uppercase tracking-tighter">
+                               CLASSIFICA FINALE
+                           </h1>
+                           
+                           <div className="w-full space-y-4 mb-12">
+                               {sortedPlayers.map((p, i) => (
+                                   <div key={i} className={`flex items-center justify-between p-6 rounded-xl border-2 transition-all duration-1000 transform ${i===0 ? 'bg-gradient-to-r from-yellow-900/80 to-yellow-600/20 border-yellow-500 scale-105 shadow-[0_0_30px_rgba(234,179,8,0.3)] z-10' : 'bg-gray-900/60 border-gray-700 opacity-80'}`}>
+                                       <div className="flex items-center gap-6">
+                                           <div className={`text-4xl font-black ${i===0 ? 'text-yellow-400' : 'text-gray-500'}`}>#{i+1}</div>
+                                           <div className="flex flex-col">
+                                               <div className={`text-2xl md:text-4xl font-bold ${i===0 ? 'text-white' : 'text-gray-300'}`}>{p.name}</div>
+                                               {i===0 && <span className="text-yellow-500 text-xs tracking-widest uppercase font-bold">Campione</span>}
+                                           </div>
+                                           {i===0 && <Trophy className="text-yellow-400 animate-bounce hidden md:block" size={40}/>}
+                                       </div>
+                                       <div className="text-3xl md:text-5xl font-mono text-white font-bold tracking-tight">
+                                           € {p.totalScore.toLocaleString()}
+                                       </div>
+                                   </div>
+                               ))}
+                           </div>
+
+                           {isHost ? (
+                               <Button 
+                                   onClick={async () => {
+                                       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { 
+                                           status: 'final_lobby',
+                                           lastAction: `Il CAMPIONE è ${sortedPlayers[0].name}!`
+                                       });
+                                   }} 
+                                   variant="gold" 
+                                   className="py-6 px-12 text-2xl animate-pulse shadow-[0_0_20px_rgba(234,179,8,0.5)] uppercase tracking-widest font-black"
+                               >
+                                   INCORONA IL CAMPIONE
+                               </Button>
+                           ) : (
+                               <div className="text-center animate-pulse">
+                                   <p className="text-blue-300 text-xl font-light mb-2">In attesa della proclamazione...</p>
+                                   <Loader2 className="animate-spin mx-auto text-blue-500" size={32}/>
+                               </div>
+                           )}
+                       </div>
+                  </div>
               );
           }
 
