@@ -38,7 +38,7 @@
 <body class="bg-black text-white">
     <div id="root"></div>
 
-    <!-- MODIFICA IMPORTANTE: data-presets="react" (rimosso 'env' per evitare conflitti) -->
+    <!-- MODIFICA IMPORTANTE: data-presets="react" -->
     <script type="text/babel" data-type="module" data-presets="react">
         import React, { useState, useEffect, useRef, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
@@ -64,15 +64,17 @@
         import { 
           Trophy, Users, Play, RotateCw, AlertTriangle, CheckCircle, XCircle,
           Sparkles, Music, Monitor, Timer, Coins, ShieldCheck, Gift, Volume2,
-          Keyboard, Mic, Bot, LogOut, Loader2
+          Keyboard, Mic, Bot, LogOut, Loader2, Info
         } from 'lucide-react';
 
         // --- GEMINI API SETUP ---
-        const apiKey = "AIzaSyDpnLF7gCcqRsln3LLVoykdWxVfuBDDAZ4"; // TUA API KEY
+        const apiKey = "AIzaSyDpnLF7gCcqRsln3LLVoykdWxVfuBDDAZ4"; 
 
         const generateAiPuzzle = async () => {
           try {
             if (!apiKey) throw new Error("No API Key");
+            const randomSeed = Math.floor(Math.random() * 1000000);
+            
             const response = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
               {
@@ -81,16 +83,19 @@
                 body: JSON.stringify({
                   contents: [{ 
                     parts: [{ 
-                      text: `Genera una frase segreta per il gioco 'La Ruota della Fortuna' in italiano. 
-                      La frase deve essere:
-                      1. Famosa, un modo di dire, o di cultura generale.
-                      2. Breve (massimo 25 caratteri spazi inclusi, TASSATIVO).
-                      3. Senza punteggiatura complessa (solo lettere e spazi).
+                      text: `Genera una frase segreta per il gioco 'La Ruota della Fortuna' in italiano.
                       
-                      Scegli una categoria casuale tra: Proverbio, Film, Musica, Geografia, Scienza, Storia, Cucina, Curiosità.
+                      REQUISITI CRITICI:
+                      1. La frase deve essere DIFFICILE, RICERCATA e MENO COMUNE. Evita assolutamente i proverbi banali o troppo corti.
+                      2. Lunghezza: tra 18 e 28 caratteri (spazi inclusi).
+                      3. Solo lettere e spazi (no punteggiatura speciale).
+                      
+                      Scegli una categoria casuale tra: Proverbio Antico, Film Cult, Letteratura, Geografia, Scienza, Storia, Curiosità.
                       
                       Rispondi SOLO con un JSON valido (niente markdown) in questo formato esatto:
-                      { "category": "NOME CATEGORIA", "phrase": "FRASE IN MAIUSCOLO" }` 
+                      { "category": "NOME CATEGORIA", "phrase": "FRASE IN MAIUSCOLO" }
+                      
+                      Seed variabilità: ${randomSeed}` 
                     }] 
                   }],
                   generationConfig: { 
@@ -143,7 +148,7 @@
           }
         };
 
-        // --- SISTEMA AUDIO (Web Audio API) ---
+        // --- SISTEMA AUDIO ---
         const audioCtx = typeof window !== 'undefined' ? new (window.AudioContext || window.webkitAudioContext)() : null;
 
         const playSound = (type) => {
@@ -220,7 +225,6 @@
 
         // --- CONFIGURAZIONE E UTILS ---
         
-        // Colori per i giocatori
         const PLAYER_THEMES = [
           { name: 'Blu', bg: 'bg-blue-600', border: 'border-blue-400', from: 'from-blue-800', to: 'to-blue-600', shadow: 'shadow-blue-500/50' },
           { name: 'Rosso', bg: 'bg-red-600', border: 'border-red-400', from: 'from-red-800', to: 'to-red-600', shadow: 'shadow-red-500/50' },
@@ -333,7 +337,6 @@
           ]
         };
 
-        // Configurazione Ruota
         const WHEEL_SEGMENTS = [
           { label: "BANCAROTTA", display: "💀", value: 0, color: "#000000", textColor: "red", type: "bankrupt" },
           { label: "€100", display: "100", value: 100, color: "#FFD700", textColor: "black", type: "cash" },
@@ -364,6 +367,7 @@
         const VOWEL_COST = 200;
         const SEGMENT_ANGLE = 360 / WHEEL_SEGMENTS.length;
         const FINAL_ROUND_TIME = 30;
+        const TURN_DURATION = 45; 
 
         // --- FIREBASE SETUP ---
         const firebaseConfig = {
@@ -497,7 +501,7 @@
           const [user, setUser] = useState(null);
           const [loading, setLoading] = useState(true);
           const [aiLoading, setAiLoading] = useState(false);
-          const [joining, setJoining] = useState(false); // Nuovo stato per il caricamento join
+          const [joining, setJoining] = useState(false); 
           const [roomCode, setRoomCode] = useState('');
           const [inputCode, setInputCode] = useState(''); 
           const [playerName, setPlayerName] = useState('');
@@ -516,8 +520,16 @@
           const [finalVowel, setFinalVowel] = useState(null);
           const [finalGuess, setFinalGuess] = useState("");
           const [finalTimer, setFinalTimer] = useState(FINAL_ROUND_TIME);
+          
+          // TURN TIMER STATE
+          const [turnTimer, setTurnTimer] = useState(TURN_DURATION);
 
           const bgStyle = "min-h-screen bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900 via-purple-950 to-black text-white font-sans overflow-x-hidden";
+
+          // Variabili statiche
+          const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+          const vowels = "AEIOU".split("");
+          const consonants = alphabet.filter(l => !vowels.includes(l));
 
           useEffect(() => {
             const initAuth = async () => {
@@ -569,6 +581,28 @@
               return () => clearInterval(interval);
             }
           }, [gameState, gameData?.finalEndTime]);
+          
+          // --- GESTIONE TIMER TURNO ---
+          useEffect(() => {
+            if (!gameData || gameData.status !== 'playing' || gameState.startsWith('final')) return;
+            if (gameData.wheelSpinning) return;
+
+            const interval = setInterval(() => {
+                const now = Date.now();
+                const end = gameData.turnEndTime || (now + 100000);
+                const left = Math.ceil((end - now) / 1000);
+                
+                if (left <= 0) {
+                    setTurnTimer(0);
+                    if (gameData.hostId === user.uid) {
+                        handleTurnTimeout();
+                    }
+                } else {
+                    setTurnTimer(left);
+                }
+            }, 1000);
+            return () => clearInterval(interval);
+          }, [gameData, user]);
 
           useEffect(() => {
             if (isSolving && solveInputRef.current) {
@@ -576,7 +610,19 @@
             }
           }, [isSolving]);
 
-          // --- LOGICA ---
+          // --- LOGICA CHECK CONSONANTI RIMASTE ---
+          const hasUnrevealedConsonants = useMemo(() => {
+            if (!gameData || !gameData.puzzle) return true;
+            
+            // Controlla se c'è almeno una consonante NON rivelata nella frase
+            return gameData.puzzle.phrase.split('').some((char, index) => {
+                // Se è una consonante E non è ancora stata rivelata (indice non presente in revealedIndices)
+                return consonants.includes(char) && !gameData.revealedIndices.includes(index);
+            });
+          }, [gameData?.puzzle, gameData?.revealedIndices]);
+
+
+          // --- LOGICA DI GIOCO ---
 
           const createLobby = async (useAI = false) => {
             if (!playerName.trim()) return setError("Inserisci il tuo nome per giocare!");
@@ -614,7 +660,8 @@
                   currentWheelValue: null, 
                   phase: 'spin',
                   winnerId: null,
-                  finalStage: null
+                  finalStage: null,
+                  turnEndTime: Date.now() + (TURN_DURATION * 1000)
                 };
                 
                 const rev = [];
@@ -635,23 +682,19 @@
           const joinLobby = async () => {
             if (!playerName.trim() || !inputCode) return setError("Nome o codice mancanti!");
             setError('');
-            setJoining(true); // Attiva stato caricamento
+            setJoining(true); 
             
             try {
                 const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', inputCode);
-                
-                // 1. Verifica se la stanza esiste
                 const snap = await getDoc(roomRef);
                 if (!snap.exists()) {
                    throw new Error("Codice errato: stanza non trovata.");
                 }
 
-                // 2. Aggiungi il giocatore
                 await updateDoc(roomRef, {
                     players: arrayUnion({ uid: user.uid, name: playerName.trim(), score: 0, totalScore: 0, jolly: 0 })
                 });
 
-                // 3. SOLO ORA mostra la stanza
                 setRoomCode(inputCode);
             } catch (e) { 
                console.error("Join error", e);
@@ -661,7 +704,23 @@
             }
           };
 
+          const handleTurnTimeout = async () => {
+              if(!gameData) return;
+              playSound('wrong');
+              const nextIndex = (gameData.currentTurnIndex + 1) % gameData.players.length;
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
+                  currentTurnIndex: nextIndex,
+                  phase: 'spin',
+                  lastAction: "TEMPO SCADUTO! Cambio turno.",
+                  turnEndTime: Date.now() + (TURN_DURATION * 1000),
+                  wheelSpinning: false
+              });
+          };
+
           const spinWheel = async () => {
+            // CHECK AGGIUNTIVO: Se non ci sono consonanti, non permettere il giro
+            if (!hasUnrevealedConsonants) return;
+
             if ((gameData.phase !== 'spin' && gameData.phase !== 'action') || gameData.wheelSpinning) return;
             playSound('spin');
             const extraSpins = 1080 + Math.floor(Math.random() * 360);
@@ -685,7 +744,6 @@
                currentScore: player.score,
             }, gameData.lastAction);
             
-            // Update DB so everyone sees the comment
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
                 hostComment: comment
             });
@@ -693,14 +751,17 @@
           };
 
           const handleSpinEnd = async () => {
-            if (gameData.hostId !== user.uid) return;
+            const isCurrentPlayer = gameData.players[gameData.currentTurnIndex].uid === user.uid;
+            if (gameData.hostId !== user.uid && !isCurrentPlayer) return;
+
             const normalizedRotation = gameData.wheelRotation % 360;
             const segmentIndex = Math.floor(((360 - normalizedRotation) % 360) / SEGMENT_ANGLE);
             const segment = WHEEL_SEGMENTS[segmentIndex];
             
             let updates = { 
                 wheelSpinning: false, 
-                currentWheelValue: segment 
+                currentWheelValue: segment,
+                turnEndTime: Date.now() + (TURN_DURATION * 1000)
             };
             const player = gameData.players[gameData.currentTurnIndex];
 
@@ -743,7 +804,11 @@
               if (char === letter) { count++; if (!newRevealed.includes(idx)) newRevealed.push(idx); }
             });
 
-            let updates = { guessedLetters: arrayUnion(letter), revealedIndices: newRevealed };
+            let updates = { 
+                guessedLetters: arrayUnion(letter), 
+                revealedIndices: newRevealed,
+                turnEndTime: Date.now() + (TURN_DURATION * 1000)
+            };
             const player = gameData.players[gameData.currentTurnIndex];
             const newPlayers = [...gameData.players];
 
@@ -793,7 +858,14 @@
             gameData.puzzle.phrase.split('').forEach((char, idx) => {
               if (char === letter) { count++; if (!newRevealed.includes(idx)) newRevealed.push(idx); }
             });
-            let updates = { players: newPlayers, guessedLetters: arrayUnion(letter), revealedIndices: newRevealed, lastAction: count > 0 ? `Trovate ${count} ${letter}.` : `Nessuna ${letter}. Turno passa.`, phase: count > 0 ? 'action' : 'spin' };
+            let updates = { 
+                players: newPlayers, 
+                guessedLetters: arrayUnion(letter), 
+                revealedIndices: newRevealed, 
+                lastAction: count > 0 ? `Trovate ${count} ${letter}.` : `Nessuna ${letter}. Turno passa.`, 
+                phase: count > 0 ? 'action' : 'spin',
+                turnEndTime: Date.now() + (TURN_DURATION * 1000)
+            };
             if (count > 0) playSound('correct');
             else { playSound('wrong'); updates.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.players.length; }
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), updates);
@@ -861,7 +933,8 @@
                         guessedLetters: [],
                         phase: 'spin',
                         currentTurnIndex: (nextRound - 1) % newPlayers.length,
-                        lastAction: `Inizia il Round ${nextRound}!`
+                        lastAction: `Inizia il Round ${nextRound}!`,
+                        turnEndTime: Date.now() + (TURN_DURATION * 1000)
                     });
                 }
             } else {
@@ -869,7 +942,8 @@
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
                     lastAction: "Soluzione ERRATA! Turno perso.",
                     currentTurnIndex: (gameData.currentTurnIndex + 1) % gameData.players.length,
-                    phase: 'spin'
+                    phase: 'spin',
+                    turnEndTime: Date.now() + (TURN_DURATION * 1000)
                 });
             }
             setIsSolving(false);
@@ -904,9 +978,6 @@
             const phs = DATABASE_FRASI[cat];
             return { category: cat, phrase: phs[Math.floor(Math.random() * phs.length)] };
           }
-          const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-          const vowels = "AEIOU".split("");
-          const consonants = alphabet.filter(l => !vowels.includes(l));
           
           const isMyTurn = gameData && user && gameData.players[gameData.currentTurnIndex].uid === user.uid;
           const isHost = gameData && user && gameData.hostId === user.uid;
@@ -1211,14 +1282,32 @@
                                             <span className={`font-bold text-2xl px-4 py-1 rounded bg-black/40 border border-blue-500/50 text-white`}>
                                                 {gameData.players[gameData.currentTurnIndex].name}
                                             </span>
+                                            {/* TIMER PER SPETTATORI */}
+                                            <div className={`flex items-center gap-2 font-mono text-xl ${turnTimer < 10 ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>
+                                                <Timer size={20}/> {turnTimer}s
+                                            </div>
                                         </div>
                                     ) : (
-                                        <div className="bg-blue-900/50 backdrop-blur-md p-4 rounded-xl border border-blue-400/50 w-full shadow-xl">
+                                        <div className="bg-blue-900/50 backdrop-blur-md p-4 rounded-xl border border-blue-400/50 w-full shadow-xl relative overflow-hidden">
+                                            {/* TIMER GIOCATORE ATTIVO */}
+                                            <div className={`absolute top-2 right-2 flex items-center gap-1 font-mono font-bold text-lg px-2 py-0.5 rounded ${turnTimer < 10 ? 'bg-red-500/20 text-red-400 animate-pulse border border-red-500' : 'bg-black/30 text-white border border-white/20'}`}>
+                                                <Timer size={16}/> {turnTimer}s
+                                            </div>
+
                                             {(gameData.phase === 'spin' || gameData.phase === 'action') && !gameData.wheelSpinning && (
-                                                <div className="space-y-3">
-                                                    <Button onClick={spinWheel} disabled={gameData.wheelSpinning} variant="gold" className="w-full py-6 text-2xl shadow-yellow-500/20">
+                                                <div className="space-y-3 pt-6">
+                                                    {!hasUnrevealedConsonants && (
+                                                        <div className="text-yellow-400 font-bold text-center text-sm animate-pulse flex flex-col items-center bg-yellow-500/10 p-2 rounded mb-2 border border-yellow-500/30">
+                                                            <div className="flex items-center gap-1"><AlertTriangle size={16}/> ATTENZIONE <AlertTriangle size={16}/></div>
+                                                            <span>Solo vocali rimaste!</span>
+                                                            <span className="text-xs text-yellow-200">Compra una vocale o risolvi.</span>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <Button onClick={spinWheel} disabled={gameData.wheelSpinning || !hasUnrevealedConsonants} variant="gold" className="w-full py-6 text-2xl shadow-yellow-500/20">
                                                         <RotateCw size={32} className={gameData.wheelSpinning ? "animate-spin" : ""} /> {gameData.phase === 'action' ? 'GIRA ANCORA' : 'GIRA'}
                                                     </Button>
+
                                                     {gameData.phase === 'action' && (
                                                         <Button onClick={openSolveMode} variant="success" className="w-full py-3">
                                                             <CheckCircle size={18}/> VOGLIO RISOLVERE
@@ -1228,8 +1317,12 @@
                                             )}
                                             
                                             {gameData.phase === 'guess' && (
-                                                <div className="animate-in slide-in-from-bottom duration-300">
-                                                    <p className="text-center text-yellow-300 text-sm mb-2 font-bold uppercase">Scegli una consonante</p>
+                                                <div className="animate-in slide-in-from-bottom duration-300 pt-6">
+                                                    <p className="text-center text-yellow-300 text-sm mb-2 font-bold uppercase flex items-center justify-center gap-2">
+                                                        {['prize', 'jolly'].includes(gameData.currentWheelValue?.type) && <Gift className="animate-bounce text-pink-500"/>}
+                                                        Scegli una consonante
+                                                        {['prize', 'jolly'].includes(gameData.currentWheelValue?.type) && <Gift className="animate-bounce text-pink-500"/>}
+                                                    </p>
                                                     <div className="flex flex-wrap justify-center gap-1">
                                                         {consonants.map(c => (
                                                             <button key={c} disabled={gameData.guessedLetters.includes(c)} onClick={()=>guessConsonant(c)} className="w-9 h-9 bg-gradient-to-b from-blue-600 to-blue-800 border border-blue-400 rounded text-white font-bold hover:scale-110 disabled:opacity-30 disabled:scale-100 transition-all">
