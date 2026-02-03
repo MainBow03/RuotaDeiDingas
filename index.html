@@ -63,7 +63,7 @@
         import { 
           Trophy, Users, Play, RotateCw, AlertTriangle, CheckCircle, XCircle,
           Sparkles, Music, Monitor, Timer, Coins, ShieldCheck, Gift, Volume2,
-          Keyboard, Mic, Bot, LogOut, Loader2, Info, Medal
+          Keyboard, Mic, Bot, LogOut, Loader2, Info, Medal, Settings
         } from 'lucide-react';
 
         // --- GEMINI API SETUP ---
@@ -508,6 +508,7 @@
           const [gameData, setGameData] = useState(null);
           const [error, setError] = useState('');
           const [hostComment, setHostComment] = useState("");
+          const [selectedRounds, setSelectedRounds] = useState(5);
           
           // SOLVE MODE STATE
           const [isSolving, setIsSolving] = useState(false);
@@ -645,6 +646,7 @@
                   status: 'lobby',
                   players: [{ uid: user.uid, name: playerName.trim(), score: 0, totalScore: 0, jolly: 0 }],
                   round: 1,
+                  maxRounds: selectedRounds, // SALVA LA CONFIGURAZIONE
                   currentTurnIndex: 0,
                   puzzle: puzzle,
                   revealedIndices: [],
@@ -745,8 +747,14 @@
           };
 
           const handleSpinEnd = async () => {
+            // FIX: Solo il giocatore corrente processa il risultato del giro
+            // Questo impedisce all'Host e agli altri giocatori di inviare aggiornamenti duplicati
+            // che causerebbero il doppio passaggio del turno.
             const isCurrentPlayer = gameData.players[gameData.currentTurnIndex].uid === user.uid;
-            if (gameData.hostId !== user.uid && !isCurrentPlayer) return;
+            
+            // Verifica anche che la ruota sia effettivamente "in movimento" nel database, 
+            // per evitare di processare eventi vecchi o duplicati.
+            if (!isCurrentPlayer || !gameData.wheelSpinning) return;
 
             const normalizedRotation = gameData.wheelRotation % 360;
             const segmentIndex = Math.floor(((360 - normalizedRotation) % 360) / SEGMENT_ANGLE);
@@ -903,15 +911,25 @@
                 const newPlayers = [...gameData.players];
                 newPlayers[gameData.currentTurnIndex].totalScore += newPlayers[gameData.currentTurnIndex].score;
                 
-                // MODIFICA: Round aumentati a 5 e aggiunta classifica finale
-                if (gameData.round >= 5) {
+                // USO LA CONFIGURAZIONE DI MAX ROUNDS (default 5 se manca)
+                if (gameData.round >= (gameData.maxRounds || 5)) {
                     const sortedPlayers = [...newPlayers].sort((a, b) => b.totalScore - a.totalScore);
                     const winner = sortedPlayers[0];
+
+                    // FIX: Genera puzzle finale E RESETTA lo stato delle lettere
+                    const finalPuzzle = getRandomPuzzle();
+                    const finalRev = [];
+                    finalPuzzle.phrase.split('').forEach((c, i) => { 
+                        if (!/[A-Z]/.test(c)) finalRev.push(i); 
+                    });
+
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), {
-                        status: 'pre_final_leaderboard', // NUOVO STATO CLASSIFICA
+                        status: 'pre_final_leaderboard',
                         winnerId: winner.uid,
                         players: newPlayers,
-                        puzzle: getRandomPuzzle(),
+                        puzzle: finalPuzzle,
+                        revealedIndices: finalRev, // Importante: Reset indici rivelati
+                        guessedLetters: [],        // Importante: Reset lettere chiamate
                         lastAction: `FINE PARTITA! Vediamo la classifica...`
                     });
                 } else {
@@ -1067,6 +1085,27 @@
                                     value={playerName} 
                                     onChange={e=>{setPlayerName(e.target.value.toUpperCase()); setError('');}} 
                                 />
+                                
+                                {/* SELECTOR PER ROUNDS */}
+                                <div className="bg-blue-950 p-3 rounded-lg border border-blue-600">
+                                    <label className="text-blue-300 text-sm font-bold mb-2 flex justify-between items-center">
+                                        <span><Settings size={14} className="inline mr-1"/> NUMERO DI ROUND</span>
+                                        <span className="text-yellow-400 text-lg">{selectedRounds}</span>
+                                    </label>
+                                    <input 
+                                        type="range" 
+                                        min="2" 
+                                        max="10" 
+                                        value={selectedRounds} 
+                                        onChange={(e) => setSelectedRounds(parseInt(e.target.value))}
+                                        className="w-full h-2 bg-blue-700 rounded-lg appearance-none cursor-pointer accent-yellow-500"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1">
+                                        <span>2</span>
+                                        <span>10</span>
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <Button onClick={() => createLobby(false)} variant="gold">CREA PARTITA</Button>
                                     <div className="flex gap-2">
@@ -1119,6 +1158,11 @@
                                         <div className="text-gray-400 py-4 animate-pulse">In attesa di connessione...</div>
                                     )}
                                 </div>
+
+                                <div className="text-center mb-4 text-sm text-gray-400 uppercase tracking-widest">
+                                    Partita di <span className="text-white font-bold">{gameData?.maxRounds || 5}</span> Round
+                                </div>
+
                                 {isHost ? (
                                     <Button onClick={async ()=>{
                                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', roomCode), { status: 'playing' });
@@ -1190,7 +1234,7 @@
                             <div className="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center font-bold text-black border-2 border-white shadow-inner">
                                 {gameData.round}
                             </div>
-                            <span className="hidden md:inline font-bold text-yellow-100 uppercase tracking-widest text-sm">Round</span>
+                            <span className="hidden md:inline font-bold text-yellow-100 uppercase tracking-widest text-sm">Round <span className="text-gray-400 text-xs">DI {gameData.maxRounds || 5}</span></span>
                         </div>
                         
                         {/* CENTER: LAST ACTION (RESTORED) */}
